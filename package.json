@@ -1,0 +1,16 @@
+{
+  "name": "zk-passport-circuits",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@noble/hashes": "^1.7.1",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "o1js": "^2.2.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@egemengol/mina-credentials": "^0.2.8"
+  }
+}

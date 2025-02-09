@@ -1,5 +1,5 @@
 import { DynamicBytes } from "@egemengol/mina-credentials";
-import { Bool, Field, Poseidon, Provable, Struct } from "o1js";
+import { Bool, Bytes, Field, Poseidon, Provable, Struct } from "o1js";
 
 export class State extends Struct({
   commitmentHaystack: [Field, Field, Field],
@@ -70,7 +70,7 @@ function processRegularChunk(
   });
 }
 
-function processOverlappingChunk(
+function processOverlappingChunkDynamic(
   state: State,
   chunkHaystack: DynamicBytes,
   needle: DynamicBytes,
@@ -104,6 +104,45 @@ function processOverlappingChunk(
       byte.value.equals(chunkHaystack.array[i].value),
     ).assertTrue();
   });
+
+  return new State({
+    commitmentNeedle: commitmentNeedle,
+    commitmentHaystack: newCommitmentHaystack,
+    processedNeedle: Bool.fromValue(true),
+    processedHaystack: finishHaystack,
+  });
+}
+
+function processOverlappingChunk(
+  state: State,
+  chunkHaystack: DynamicBytes,
+  needle: Bytes,
+  finishHaystack: Bool = Bool.fromValue(false),
+): State {
+  if (needle.length > chunkHaystack.maxLength) {
+    throw new Error("needle cannot be bigger than chunk");
+  }
+  state.processedHaystack.assertFalse(
+    "should not continue processing after marking haystack finished",
+  );
+  state.processedNeedle.assertFalse(
+    "should not call this after processing needle once",
+  );
+
+  const newCommitmentHaystack = digest(
+    // @ts-ignore
+    state.commitmentHaystack,
+    chunkHaystack,
+  );
+
+  // console.log("need", needle.toHex());
+  const commitmentNeedle = Poseidon.hash(needle.bytes.map((b) => b.value));
+  // console.log("comm need", commitmentNeedle.toBigInt());
+
+  chunkHaystack.length.assertGreaterThanOrEqual(needle.length);
+  for (let i = 0; i < needle.length; i++) {
+    needle.bytes[i].assertEquals(chunkHaystack.array[i]);
+  }
 
   return new State({
     commitmentNeedle: commitmentNeedle,
@@ -164,6 +203,7 @@ function chunkifyHaystack(
 const Contains = {
   init,
   processRegularChunk,
+  processOverlappingChunkDynamic,
   processOverlappingChunk,
   chunkifyHaystack,
   digest,

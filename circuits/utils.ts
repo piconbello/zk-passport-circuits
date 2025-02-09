@@ -139,3 +139,21 @@ export function assertSubarrayDynamic(
       .assertEquals(needle.bytes[i]);
   }
 }
+
+export function bytes32ToScalar(slice32: UInt8[]): [Field, Field, Field] {
+  const x2 = bytesToLimbBE(slice32.slice(0, 10));
+  const x1 = bytesToLimbBE(slice32.slice(10, 21));
+  const x0 = bytesToLimbBE(slice32.slice(21, 32));
+
+  return [x0, x1, x2];
+}
+
+export function bytesToLimbBE(bytes_: UInt8[]) {
+  const bytes = bytes_.map((x) => x.value);
+  const n = bytes.length;
+  let limb = bytes[0];
+  for (let i = 1; i < n; i++) {
+    limb = limb.mul(1n << 8n).add(bytes[i]);
+  }
+  return limb.seal();
+}

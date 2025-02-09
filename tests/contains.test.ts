@@ -50,7 +50,7 @@ describe("Contains Circuit - Pattern Matching", () => {
 
       expect(headingChunks).toHaveLength(0);
 
-      state = Contains.processOverlappingChunk(
+      state = Contains.processOverlappingChunkDynamic(
         state,
         Chunk.fromBytes(overlappingChunk),
         Needle.fromBytes(needle),
@@ -71,7 +71,7 @@ describe("Contains Circuit - Pattern Matching", () => {
         state = Contains.processRegularChunk(state, Chunk.fromBytes(chunk));
       });
 
-      state = Contains.processOverlappingChunk(
+      state = Contains.processOverlappingChunkDynamic(
         state,
         Chunk.fromBytes(overlappingChunk),
         Needle.fromBytes(needle),
@@ -95,7 +95,7 @@ describe("Contains Circuit - Pattern Matching", () => {
         state = Contains.processRegularChunk(state, Chunk.fromBytes(chunk));
       });
 
-      state = Contains.processOverlappingChunk(
+      state = Contains.processOverlappingChunkDynamic(
         state,
         Chunk.fromBytes(overlappingChunk),
         Needle.fromBytes(needle),
@@ -121,7 +121,7 @@ describe("Contains Circuit - Pattern Matching", () => {
         state = Contains.processRegularChunk(state, Chunk.fromBytes(chunk));
       });
 
-      state = Contains.processOverlappingChunk(
+      state = Contains.processOverlappingChunkDynamic(
         state,
         Chunk.fromBytes(overlappingChunk),
         Needle.fromBytes(needle),
@@ -145,7 +145,7 @@ describe("Contains Circuit - Pattern Matching", () => {
         state = Contains.processRegularChunk(state, Chunk.fromBytes(chunk));
       });
 
-      state = Contains.processOverlappingChunk(
+      state = Contains.processOverlappingChunkDynamic(
         state,
         Chunk.fromBytes(overlappingChunk),
         Needle.fromBytes(needle),
@@ -184,7 +184,7 @@ describe("Contains Circuit - Pattern Matching", () => {
           haystack,
           needle,
         );
-        Contains.processOverlappingChunk(
+        Contains.processOverlappingChunkDynamic(
           Contains.init(),
           Chunk.fromBytes(overlappingChunk),
           Needle.fromBytes(needle),

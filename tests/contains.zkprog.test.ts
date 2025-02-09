@@ -42,7 +42,11 @@ const ContainsZkProg = ZkProgram({
         needle: Needle,
       ) {
         proof.verify();
-        const newState = Contains.processOverlappingChunk(state, chunk, needle);
+        const newState = Contains.processOverlappingChunkDynamic(
+          state,
+          chunk,
+          needle,
+        );
         return {
           publicOutput: newState,
         };

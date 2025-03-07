@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll } from "bun:test";
-import * as merger from "../src/merger";
+import * as merger from "../circuits/bimodal/merger";
 import { VerificationKey, Field, Poseidon, ZkProgram } from "o1js";
 import { Out } from "../circuits/bimodal/common";
 
@@ -126,7 +126,7 @@ describe("generateRootProof", () => {
   let vk3: VerificationKey;
   beforeAll(async () => {
     console.log("Starting compilation of merger program...");
-    await merger.compile();
+    await merger.Merger.compile();
     console.log("Merger program compilation completed");
 
     console.log("Starting compilation of test leaf programs...");

@@ -15,3 +15,5 @@ export class SIGNED_ATTRS extends DynamicBytes({ maxLength: 200 }) {}
 
 export class Bytes65 extends Bytes(65) {}
 export class Static65 extends StaticArray(UInt8, 65) {}
+
+export class Bytes32 extends Bytes(32) {}

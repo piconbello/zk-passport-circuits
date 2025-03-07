@@ -177,3 +177,5 @@ dist
 # ZkPassport ignores
 files
 justfile
+
+.proofcache

@@ -13,7 +13,7 @@
         "@types/bun": "latest",
       },
       "peerDependencies": {
-        "o1js": "^2.2.0",
+        "o1js": "^2.3.0",
         "typescript": "^5.0.0",
       },
     },
@@ -63,7 +63,7 @@
 
     "node-fetch": ["node-fetch@2.7.0", "", { "dependencies": { "whatwg-url": "^5.0.0" }, "peerDependencies": { "encoding": "^0.1.0" }, "optionalPeers": ["encoding"] }, "sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A=="],
 
-    "o1js": ["o1js@2.2.0", "", { "dependencies": { "blakejs": "1.2.1", "cachedir": "^2.4.0", "isomorphic-fetch": "^3.0.0", "js-sha256": "^0.9.0", "reflect-metadata": "^0.1.13", "tslib": "^2.3.0" }, "bin": { "snarky-run": "src/build/run.js" } }, "sha512-lR8vmBlvzz3h+tDUajZfC/zVM+yKyrJFoIa57nED7F8WRfCGZHHy5lUpaUgHwVsC3ZE+aRaFtj2B2IzYyJu1AQ=="],
+    "o1js": ["o1js@2.3.0", "", { "dependencies": { "blakejs": "1.2.1", "cachedir": "^2.4.0", "isomorphic-fetch": "^3.0.0", "js-sha256": "^0.9.0", "reflect-metadata": "^0.1.13", "tslib": "^2.3.0" }, "bin": { "snarky-run": "src/build/run.js" } }, "sha512-APopxUwFZR703qACOW6pzxUK3TiSl9TsawW81lejZhhNPxodAtdE0FGiTEYpeaSCJ68rJsJiuOInlSY6v/0UBw=="],
 
     "onetime": ["onetime@7.0.0", "", { "dependencies": { "mimic-function": "^5.0.0" } }, "sha512-VXJjc87FScF88uafS3JllDgvAm+c/Slfz06lorj2uAY34rlUu0Nt+v8wreiImcrgAjjIHp1rXpTDlLOGw29WwQ=="],
 

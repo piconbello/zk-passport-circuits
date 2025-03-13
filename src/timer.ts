@@ -8,6 +8,7 @@ const CROSS_MARK = "✗";
 type LogFunction = <T>(message: string, fn: () => Promise<T>) => Promise<T>;
 
 interface Task {
+  id: string; // Add a unique ID to identify tasks
   message: string;
   startTime: number;
   endTime?: number;
@@ -48,30 +49,25 @@ const getTaskDisplay = (task: Task): string => {
 const updateDisplay = () => {
   spinnerIndex = (spinnerIndex + 1) % spinnerFrames.length;
 
-  // Find the last running task (if any)
-  const lastRunningTaskIndex = [...tasks]
-    .reverse()
-    .findIndex((t) => t.status === "running");
+  // If no tasks, just exit
+  if (tasks.length === 0) {
+    stopUpdating();
+    return;
+  }
 
-  if (lastRunningTaskIndex === -1) {
-    // If no running tasks, just display all completed tasks
+  // Check if any tasks are still running
+  const hasRunningTasks = tasks.some((task) => task.status === "running");
+
+  if (!hasRunningTasks) {
+    // If no running tasks, display everything and stop updates
     const finalOutput = tasks.map(getTaskDisplay).join("\n");
     logUpdate(finalOutput);
     stopUpdating();
     return;
   }
 
-  // Split tasks into completed and current
-  const reversedIndex = tasks.length - 1 - lastRunningTaskIndex;
-  const completedTasks = tasks.slice(0, reversedIndex);
-  const currentTasks = tasks.slice(reversedIndex);
-
-  // Render completed tasks normally and current tasks with updates
-  const output = [
-    ...completedTasks.map(getTaskDisplay),
-    ...currentTasks.map(getTaskDisplay),
-  ].join("\n");
-
+  // Just render all tasks
+  const output = tasks.map(getTaskDisplay).join("\n");
   logUpdate(output);
 };
 
@@ -89,8 +85,24 @@ const stopUpdating = () => {
   }
 };
 
+// Create a unique ID for tasks
+const createTaskId = (message: string): string => {
+  return `${message}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+};
+
 export const time: LogFunction = async (message, fn) => {
+  // Check if we already have a task with this message
+  const existingTaskIndex = tasks.findIndex(
+    (task) => task.message === message && task.status === "running",
+  );
+
+  // If found, remove the existing task to avoid duplicates
+  if (existingTaskIndex !== -1) {
+    tasks.splice(existingTaskIndex, 1);
+  }
+
   const task: Task = {
+    id: createTaskId(message),
     message,
     startTime: Date.now(),
     status: "running",

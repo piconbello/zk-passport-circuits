@@ -1,13 +1,8 @@
 import path from "node:path";
 import crypto from "crypto";
 import { Field, VerificationKey, ZkProgram, Proof, Poseidon } from "o1js";
-import {
-  LeafProofLeft,
-  LeafProofRight,
-  Merger,
-  MergerProof,
-} from "../unrolled/merger.ts";
-import { Out } from "../unrolled/common.ts";
+import { LeafProofLeft, LeafProofRight, Merger, MergerProof } from "./merger";
+import { Out } from "./out";
 import { time } from "../src/timer.ts";
 import { ProofCache } from "../src/proofCache.ts";
 import { sha256 } from "@noble/hashes/sha256";

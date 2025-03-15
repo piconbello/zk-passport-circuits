@@ -1,4 +1,4 @@
-import { Bytes, UInt8, Field, Struct } from "o1js";
+import { Bytes, UInt8 } from "o1js";
 
 import { DynamicBytes, StaticArray } from "@egemengol/mina-credentials/dynamic";
 
@@ -18,9 +18,3 @@ export class Bytes65 extends Bytes(65) {}
 export class Static65 extends StaticArray(UInt8, 65) {}
 
 export class Bytes32 extends Bytes(32) {}
-
-export class Out extends Struct({
-  left: Field,
-  right: Field,
-  vkDigest: Field,
-}) {}

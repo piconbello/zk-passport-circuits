@@ -1,7 +1,7 @@
 import { Field, Poseidon, Provable, Struct, ZkProgram, Bytes } from "o1js";
 import { Bytes32, DG1_TD3, SIGNED_ATTRS_256 } from "./constants";
 import { SHA2 } from "@egemengol/mina-credentials/dynamic";
-import { Out } from "./common";
+import { Out } from "../unrolled_meta/out";
 import { assertSubarray } from "./utils";
 
 // TODO maybe use poseidon-safe implementation that encodes length??

@@ -10,7 +10,7 @@ import {
   Proof,
   Provable,
 } from "o1js";
-import { Out } from "./common";
+import { Out } from "./out";
 
 // For leaf program proofs
 export class LeafProofLeft extends DynamicProof<Undefined, Out> {
@@ -109,6 +109,20 @@ export const Merger = ZkProgram({
             left: outLeft.left,
             right: outRight.right,
             vkDigest,
+          }),
+        };
+      },
+    },
+
+    obfuscate: {
+      privateInputs: [SelfProof],
+      async method(pObvious: SelfProof<Undefined, Out>) {
+        pObvious.verify();
+        return {
+          publicOutput: new Out({
+            left: pObvious.publicOutput.left,
+            right: pObvious.publicOutput.right,
+            vkDigest: Poseidon.hash([pObvious.publicOutput.vkDigest]),
           }),
         };
       },

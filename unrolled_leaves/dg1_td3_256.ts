@@ -1,7 +1,7 @@
 import { Field, Poseidon, Provable, Struct, ZkProgram, Bytes } from "o1js";
 import { DG1_TD3 } from "./constants";
 import { SHA2 } from "@egemengol/mina-credentials/dynamic";
-import { Out } from "./common";
+import { Out } from "../unrolled_meta/out";
 import { LdsDigestState } from "./lds_256";
 
 // TODO maybe use poseidon-safe implementation that encodes length?

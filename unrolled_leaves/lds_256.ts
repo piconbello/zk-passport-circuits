@@ -7,7 +7,7 @@ import {
   Sha2IterationState,
 } from "@egemengol/mina-credentials/dynamic";
 import { assertSubarray } from "./utils";
-import { Out } from "./common";
+import { Out } from "../unrolled_meta/out";
 
 // TODO maybe use poseidon-safe implementation that encodes length??
 export const OFFSET_DG1_IN_LDS_256 = 28;

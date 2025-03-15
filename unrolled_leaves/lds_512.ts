@@ -1,5 +1,5 @@
 import { Field, Poseidon, ZkProgram, SelfProof, Bytes, Provable } from "o1js";
-import { Bytes32, LDS_256 } from "./constants";
+import { Bytes32, LDS_512 } from "./constants";
 import {
   DynamicSHA2,
   Sha2FinalIteration,
@@ -10,10 +10,10 @@ import { assertSubarray } from "./utils";
 import { Out } from "../unrolled_meta/out";
 
 // TODO maybe use poseidon-safe implementation that encodes length??
-export const OFFSET_DG1_IN_LDS_256 = 28;
+export const OFFSET_DG1_IN_LDS_512 = 28;
 
-export const LDS_DIGEST_BLOCKS_PER_ITERATION_256 = 6; // can be less but more fails compilation
-export class LdsDigestState_256 extends Sha2IterationState(256) {
+export const LDS_DIGEST_BLOCKS_PER_ITERATION_512 = 6;
+export class LdsDigestState_512 extends Sha2IterationState(512) {
   hash(): Field {
     const posDigestState = Poseidon.initialState();
     Poseidon.update(posDigestState, [Field(this.len)]);
@@ -25,21 +25,21 @@ export class LdsDigestState_256 extends Sha2IterationState(256) {
     return posDigestState[0];
   }
 }
-export class LdsDigestIteration_256 extends Sha2Iteration(
-  256,
-  LDS_DIGEST_BLOCKS_PER_ITERATION_256,
+export class LdsDigestIteration_512 extends Sha2Iteration(
+  512,
+  LDS_DIGEST_BLOCKS_PER_ITERATION_512,
 ) {}
-export class LdsDigestIterationFinal_256 extends Sha2FinalIteration(
-  256,
-  LDS_DIGEST_BLOCKS_PER_ITERATION_256,
+export class LdsDigestIterationFinal_512 extends Sha2FinalIteration(
+  512,
+  LDS_DIGEST_BLOCKS_PER_ITERATION_512,
 ) {}
 
-export const LDS_256_Step = ZkProgram({
-  name: "lds-256-step",
+export const LDS_512_Step = ZkProgram({
+  name: "lds-512-step",
   publicOutput: Out,
 
   methods: {
-    step_dummy_256: {
+    step_dummy_512: {
       privateInputs: [Field],
       async method(carry: Field) {
         return {
@@ -51,14 +51,14 @@ export const LDS_256_Step = ZkProgram({
         };
       },
     },
-    step_256: {
-      privateInputs: [Field, LdsDigestState_256, LdsDigestIteration_256],
+    step_512: {
+      privateInputs: [Field, LdsDigestState_512, LdsDigestIteration_512],
       async method(
         carry: Field,
-        state: LdsDigestState_256,
-        iteration: LdsDigestIteration_256,
+        state: LdsDigestState_512,
+        iteration: LdsDigestIteration_512,
       ) {
-        let ldsDigestNew = new LdsDigestState_256(
+        let ldsDigestNew = new LdsDigestState_512(
           DynamicSHA2.update(state, iteration),
         );
         return {
@@ -73,19 +73,19 @@ export const LDS_256_Step = ZkProgram({
   },
 });
 
-export const LDS_256_LastStep = ZkProgram({
-  name: "lds-256-laststep",
+export const LDS_512_LastStep = ZkProgram({
+  name: "lds-512-laststep",
   publicOutput: Out,
 
   methods: {
-    laststep_256: {
-      privateInputs: [Field, LdsDigestState_256, LdsDigestIterationFinal_256],
+    laststep_512: {
+      privateInputs: [Field, LdsDigestState_512, LdsDigestIterationFinal_512],
       async method(
         carry: Field,
-        state: LdsDigestState_256,
-        iteration: LdsDigestIterationFinal_256,
+        state: LdsDigestState_512,
+        iteration: LdsDigestIterationFinal_512,
       ) {
-        let ldsDigestNew = new LdsDigestState_256(
+        let ldsDigestNew = new LdsDigestState_512(
           DynamicSHA2.finalizeOnly(state, iteration),
         );
         return {
@@ -100,31 +100,30 @@ export const LDS_256_LastStep = ZkProgram({
   },
 });
 
-export const LDS_256_Verifier = ZkProgram({
-  name: "lds-256-verifier",
+export const LDS_512_Verifier = ZkProgram({
+  name: "lds-512-verifier",
   publicOutput: Out,
 
   methods: {
     verifyLDS: {
-      privateInputs: [Field, LdsDigestState_256, LDS_256, Bytes32],
+      privateInputs: [Field, LdsDigestState_512, LDS_512, Bytes32],
       async method(
         carry: Field,
-        state: LdsDigestState_256,
-        lds: LDS_256,
+        state: LdsDigestState_512,
+        lds: LDS_512,
         dg1Digest: Bytes32,
       ) {
         carry.assertEquals(Poseidon.hash(dg1Digest.bytes.map((v) => v.value)));
 
-        lds.length.assertGreaterThan(OFFSET_DG1_IN_LDS_256 + 32);
+        lds.length.assertGreaterThan(OFFSET_DG1_IN_LDS_512 + 32);
         assertSubarray(
           lds.array,
           dg1Digest.bytes,
           32,
-          OFFSET_DG1_IN_LDS_256,
+          OFFSET_DG1_IN_LDS_512,
           "dg1Digest in lds",
-        ); // fails what
-        Provable.log("assert complete");
-        const ldsDigest: Bytes = DynamicSHA2.validate(256, state, lds);
+        );
+        const ldsDigest: Bytes = DynamicSHA2.validate(512, state, lds);
 
         return {
           publicOutput: new Out({

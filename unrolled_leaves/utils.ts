@@ -1,4 +1,4 @@
-import { UInt8 } from "o1js";
+import { UInt8, Provable } from "o1js";
 
 export function assertSubarray(
   haystack: UInt8[],

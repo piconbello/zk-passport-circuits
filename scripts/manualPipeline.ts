@@ -17,15 +17,18 @@ import { time } from "../src/timer.ts";
 import {
   Bytes32,
   DG1_TD3,
-  DigestDG1,
-  DigestLDS_laststep,
-  DigestLDS_step,
-  DigestLDS_verifier,
-  DigestSignedAttrs,
+  LDS_256_Step,
+  LDS_256_LastStep,
+  LDS_256_Verifier,
+  LDS_512_Step,
+  LDS_512_LastStep,
+  LDS_512_Verifier,
   LDS_256,
-  LDS_DIGEST_BLOCKS_PER_ITERATION,
-  LdsDigestState,
   SIGNED_ATTRS_256,
+  DG1_TD3_256,
+  LDS_DIGEST_BLOCKS_PER_ITERATION_256,
+  LdsDigestState_256,
+  SignedAttrs_256,
 } from "../unrolled_leaves";
 import { Merger } from "../unrolled_meta/merger.ts";
 import {
@@ -62,10 +65,10 @@ async function main() {
     bundle.dg1,
     async () => {
       const vk = await time("Compiling dg1", async () => {
-        return (await DigestDG1.compile()).verificationKey;
+        return (await DG1_TD3_256.compile()).verificationKey;
       });
       const proof = await time("Proving dg1", async () => {
-        return (await DigestDG1.td3_256(DG1_TD3.from(bundle.dg1))).proof;
+        return (await DG1_TD3_256.td3_256(DG1_TD3.from(bundle.dg1))).proof;
       });
       return {
         proofJSON: JSON.stringify(proof.toJSON()),
@@ -74,7 +77,7 @@ async function main() {
     },
   );
 
-  const pDG1 = await ZkProgram.Proof(DigestDG1).fromJSON(
+  const pDG1 = await ZkProgram.Proof(DG1_TD3_256).fromJSON(
     JSON.parse(dg1Result.proofJSON),
   );
   const vkDG1 = vkFromJSON(dg1Result.verificationKeyJSON);
@@ -90,7 +93,7 @@ async function main() {
     "LDS_step_vk",
     async () => {
       const vk = await time("Compiling lds step", async () => {
-        return (await DigestLDS_step.compile()).verificationKey;
+        return (await LDS_256_Step.compile()).verificationKey;
       });
       return {
         proofJSON: "{}", // Just a placeholder, we only need the VK
@@ -106,7 +109,7 @@ async function main() {
     "LDS_laststep_vk",
     async () => {
       const vk = await time("Compiling lds laststep", async () => {
-        return (await DigestLDS_laststep.compile()).verificationKey;
+        return (await LDS_256_LastStep.compile()).verificationKey;
       });
       return {
         proofJSON: "{}", // Just a placeholder, we only need the VK
@@ -120,11 +123,11 @@ async function main() {
   const proofsLDS_step = [];
   const { iterations: steps, final: laststep } = DynamicSHA2.split(
     256,
-    LDS_DIGEST_BLOCKS_PER_ITERATION,
+    LDS_DIGEST_BLOCKS_PER_ITERATION_256,
     LDS_256.fromBytes(bundle.lds),
   );
 
-  let curState = new LdsDigestState(LdsDigestState.initial());
+  let curState = new LdsDigestState_256(LdsDigestState_256.initial());
 
   // Process each LDS step
   for (let i = 0; i < steps.length; i++) {
@@ -134,7 +137,7 @@ async function main() {
       `lds_step_${i}_${bundle.dg1}`,
       async () => {
         const proof = await time(`Proving lds step ${i}`, async () => {
-          return (await DigestLDS_step.step_256(carry, curState, step)).proof;
+          return (await LDS_256_Step.step_256(carry, curState, step)).proof;
         });
         return {
           proofJSON: JSON.stringify(proof.toJSON()),
@@ -143,11 +146,11 @@ async function main() {
       },
     );
 
-    const stepProof = await ZkProgram.Proof(DigestLDS_step).fromJSON(
+    const stepProof = await ZkProgram.Proof(LDS_256_Step).fromJSON(
       JSON.parse(stepResult.proofJSON),
     );
     proofsLDS_step.push(stepProof);
-    curState = new LdsDigestState(DynamicSHA2.update(curState, step));
+    curState = new LdsDigestState_256(DynamicSHA2.update(curState, step));
   }
 
   // Process last step
@@ -156,9 +159,8 @@ async function main() {
     `lds_laststep_${bundle.dg1}`,
     async () => {
       const proof = await time("Proving lds laststep", async () => {
-        return (
-          await DigestLDS_laststep.laststep_256(carry, curState, laststep)
-        ).proof;
+        return (await LDS_256_LastStep.laststep_256(carry, curState, laststep))
+          .proof;
       });
       return {
         proofJSON: JSON.stringify(proof.toJSON()),
@@ -167,11 +169,13 @@ async function main() {
     },
   );
 
-  const pLDS_laststep = await ZkProgram.Proof(DigestLDS_laststep).fromJSON(
+  const pLDS_laststep = await ZkProgram.Proof(LDS_256_LastStep).fromJSON(
     JSON.parse(lastStepResult.proofJSON),
   );
   // proofsLDS_step.push(lastStepProof);
-  curState = new LdsDigestState(DynamicSHA2.finalizeOnly(curState, laststep));
+  curState = new LdsDigestState_256(
+    DynamicSHA2.finalizeOnly(curState, laststep),
+  );
 
   // Process LDS verifier
   const ldsVerifierResult = await cache.getProof(
@@ -185,12 +189,12 @@ async function main() {
     },
     async () => {
       const vk = await time("Compiling lds verifier", async () => {
-        return (await DigestLDS_verifier.compile()).verificationKey;
+        return (await LDS_256_Verifier.compile()).verificationKey;
       });
 
       const proof = await time("Verifying LDS", async () => {
         return (
-          await DigestLDS_verifier.verifyLDS(
+          await LDS_256_Verifier.verifyLDS(
             carry,
             curState,
             LDS_256.fromBytes(bundle.lds),
@@ -199,6 +203,8 @@ async function main() {
         ).proof;
       });
 
+      console.log("verify lds proof");
+
       return {
         proofJSON: JSON.stringify(proof.toJSON()),
         verificationKeyJSON: vkToJSON(vk),
@@ -206,10 +212,12 @@ async function main() {
     },
   );
 
-  const pLDS = await ZkProgram.Proof(DigestLDS_verifier).fromJSON(
+  console.log("here");
+  const pLDS = await ZkProgram.Proof(LDS_256_Verifier).fromJSON(
     JSON.parse(ldsVerifierResult.proofJSON),
   );
   const vkLDS_verifier = vkFromJSON(ldsVerifierResult.verificationKeyJSON);
+  console.log("heree");
 
   // Process Signed Attrs
   const signedAttrsResult = await cache.getProof(
@@ -220,12 +228,13 @@ async function main() {
     },
     async () => {
       const vk = await time("Compiling signed attrs", async () => {
-        return (await DigestSignedAttrs.compile()).verificationKey;
+        return (await SignedAttrs_256.compile()).verificationKey;
       });
 
+      console.log("betw");
       const proof = await time("Proving signed attrs", async () => {
         return (
-          await DigestSignedAttrs._256(
+          await SignedAttrs_256._256(
             Bytes32.from(sha256(bundle.lds)),
             SIGNED_ATTRS_256.from(bundle.signed_attrs),
           )
@@ -239,7 +248,7 @@ async function main() {
     },
   );
 
-  const pSignedAttrs = await ZkProgram.Proof(DigestSignedAttrs).fromJSON(
+  const pSignedAttrs = await ZkProgram.Proof(SignedAttrs_256).fromJSON(
     JSON.parse(signedAttrsResult.proofJSON),
   );
   const vkSignedAttrs = vkFromJSON(signedAttrsResult.verificationKeyJSON);

@@ -123,7 +123,6 @@ export const LDS_256_Verifier = ZkProgram({
           OFFSET_DG1_IN_LDS_256,
           "dg1Digest in lds",
         ); // fails what
-        Provable.log("assert complete");
         const ldsDigest: Bytes = DynamicSHA2.validate(256, state, lds);
 
         return {

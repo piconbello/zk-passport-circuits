@@ -223,33 +223,29 @@ export async function generateRootProof(
  * @param vks Array of verification keys
  * @returns A Field representing the digest of all VKs
  */
-export async function calculateRootVKDigest(
-  vks: VerificationKey[],
-): Promise<Field> {
+export function calculateRootVKDigest(vks: VerificationKey[]): Field {
   if (vks.length === 0) throw Error("Empty array of VerificationKeys");
   if (vks.length === 1) return vks[0].hash;
 
-  return await time("Calculating root VK digest", async () => {
-    // Initial transformation of VKs to their hashes
-    let currentLevel = vks.map((vk) => vk.hash);
+  // Initial transformation of VKs to their hashes
+  let currentLevel = vks.map((vk) => vk.hash);
 
-    // Keep reducing until we have a single value
-    while (currentLevel.length > 1) {
-      const nextLevel: Field[] = [];
+  // Keep reducing until we have a single value
+  while (currentLevel.length > 1) {
+    const nextLevel: Field[] = [];
 
-      // Process pairs
-      for (let i = 0; i < currentLevel.length - 1; i += 2) {
-        nextLevel.push(Poseidon.hash([currentLevel[i], currentLevel[i + 1]]));
-      }
-
-      // Handle odd element if present
-      if (currentLevel.length % 2 === 1) {
-        nextLevel.push(currentLevel[currentLevel.length - 1]);
-      }
-
-      currentLevel = nextLevel;
+    // Process pairs
+    for (let i = 0; i < currentLevel.length - 1; i += 2) {
+      nextLevel.push(Poseidon.hash([currentLevel[i], currentLevel[i + 1]]));
     }
 
-    return currentLevel[0];
-  });
+    // Handle odd element if present
+    if (currentLevel.length % 2 === 1) {
+      nextLevel.push(currentLevel[currentLevel.length - 1]);
+    }
+
+    currentLevel = nextLevel;
+  }
+
+  return currentLevel[0];
 }

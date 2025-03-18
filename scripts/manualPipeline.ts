@@ -25,12 +25,15 @@ import {
   VerifySignedAttrs_size256_sha256,
   VerifySignedAttrs_size256_sha256_Input,
   EcdsaSecp256r1,
+  PubkeyInCertCert,
 } from "../unrolled_leaves";
 import { Merger } from "../unrolled_meta/merger.ts";
 import {
   calculateRootVKDigest,
   generateRootProof,
 } from "../unrolled_meta/merger_utils.ts";
+import { generatePubkeyInCertProofs } from "../unrolled_meta/contains_utils.ts";
+import Contains from "../unrolled_meta/contains.ts";
 
 // Helper function to convert VerificationKey to JSON string
 function vkToJSON(vk: VerificationKey): string {
@@ -243,6 +246,13 @@ async function main() {
   );
   const vkSignedAttrs = vkFromJSON(signedAttrsResult.verificationKeyJSON);
 
+  const pubkeyPoint = new secp256r1.ProjectivePoint(
+    bundle.cert_local_pubkey.x,
+    bundle.cert_local_pubkey.y,
+    1n,
+  );
+  const pubkeySerial = pubkeyPoint.toRawBytes(false);
+
   // Verify SignedAttrs with signature
   // We need to extract the public key and signature from the bundle
   const verifySignedAttrsResult = await cache.getProof(
@@ -262,13 +272,6 @@ async function main() {
         return (await VerifySignedAttrs_size256_sha256.compile())
           .verificationKey;
       });
-
-      const pubkeyPoint = new secp256r1.ProjectivePoint(
-        bundle.cert_local_pubkey.x,
-        bundle.cert_local_pubkey.y,
-        1n,
-      );
-      const pubkeySerial = pubkeyPoint.toRawBytes(false);
 
       // Convert signature r and s bigints into Field3s
       const signature = new EcdsaSecp256r1({
@@ -302,6 +305,14 @@ async function main() {
     verifySignedAttrsResult.verificationKeyJSON,
   );
 
+  const containsResult = await generatePubkeyInCertProofs(
+    bundle.cert_local_tbs,
+    pubkeySerial,
+    cache,
+  );
+
+  // console.log(`✅ Generated ${containsResult.proofs.length} contains proofs`);
+
   console.log("🍃 Leaves! 🍃");
 
   const vks = [
@@ -311,6 +322,7 @@ async function main() {
     vkLDS_verifier,
     vkSignedAttrs,
     vkVerifySignedAttrs,
+    ...Array(containsResult.proofs.length).fill(containsResult.verificationKey),
   ];
 
   const rootProof = await generateRootProof(
@@ -321,15 +333,19 @@ async function main() {
       pLDS,
       pSignedAttrs,
       pVerifySignedAttrs,
+      ...containsResult.proofs,
     ],
     vks,
     cache,
   );
 
-  const rootVkDigest = await calculateRootVKDigest(vks);
+  const rootVkDigest = calculateRootVKDigest(vks);
 
-  console.log(rootVkDigest.toBigInt());
-  console.log(rootProof.publicOutput.vkDigest.toBigInt());
+  if (rootVkDigest.equals(rootProof.publicOutput.vkDigest).toBoolean()) {
+    console.log("✅ Root proof VK digest matches calculated digest");
+  } else {
+    console.log("❌ Root proof VK digest mismatch");
+  }
 
   const obfuscationResult = await cache.getProof(
     path.resolve(__dirname, "../unrolled_meta/merger.ts"),
@@ -353,11 +369,40 @@ async function main() {
     JSON.parse(obfuscationResult.proofJSON),
   );
 
-  console.log(
-    "Final obfuscated VK digest:",
-    finalProof.publicOutput.vkDigest.toBigInt(),
+  console.log("✅ Final obfuscated proof generated");
+
+  // Verify the obfuscated proof endpoints
+  console.log("🔍 Verifying obfuscated proof endpoints:");
+
+  // Check left side - should be DG1 digest
+  const dg1Digest = Poseidon.hash(
+    Bytes.from(bundle.dg1).bytes.map((b) => b.value),
   );
-  console.log("Complete pipeline executed successfully!");
+
+  if (finalProof.publicOutput.left.equals(dg1Digest).toBoolean()) {
+    console.log("✅ Obfuscated proof left endpoint matches DG1 digest");
+  } else {
+    console.log(
+      "❌ Obfuscated proof left endpoint doesn't match expected DG1 digest",
+    );
+  }
+
+  // Check right side - should be certificate digest
+  const cert = Uint8Array.from(bundle.cert_local_tbs);
+  const certBytes = PubkeyInCertCert.fromBytes(cert);
+  const certDigest = Contains.digest(Poseidon.initialState(), certBytes)[0];
+
+  if (finalProof.publicOutput.right.equals(certDigest).toBoolean()) {
+    console.log(
+      "✅ Obfuscated proof right endpoint matches certificate digest",
+    );
+  } else {
+    console.log(
+      "❌ Obfuscated proof right endpoint doesn't match expected certificate digest",
+    );
+  }
+
+  console.log("\n🎉 Complete pipeline executed successfully!");
 }
 
 await main();

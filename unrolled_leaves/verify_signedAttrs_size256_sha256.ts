@@ -9,6 +9,7 @@ import {
 import { SHA2 } from "@egemengol/mina-credentials/dynamic";
 import { Out } from "../unrolled_meta/out";
 import { bytes32ToScalar, parseECpubkey256Uncompressed } from "./utils";
+import Contains from "../unrolled_meta/contains";
 // import { mapObject } from "../tests/common";
 
 export class VerifySignedAttrs_size256_sha256_Input extends Struct({
@@ -47,9 +48,14 @@ export const VerifySignedAttrs_size256_sha256 = ZkProgram({
 
         /// Commitment
         const left = Poseidon.hash(inp.signedAttrs.bytes.map((u8) => u8.value));
-        const right = Poseidon.hash(
+        const pubkeySerialBytesDigest = Poseidon.hash(
           inp.pubkeySerial.bytes.map((u8) => u8.value),
         );
+        const containsStateInit = Contains.init().toFields();
+        const right = Poseidon.hash([
+          pubkeySerialBytesDigest,
+          ...containsStateInit,
+        ]);
 
         return {
           publicOutput: new Out({

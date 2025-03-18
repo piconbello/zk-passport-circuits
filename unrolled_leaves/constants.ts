@@ -5,9 +5,11 @@ import {
   Field,
   UInt8,
   Crypto,
+  Struct,
 } from "o1js";
 
 import { DynamicBytes, StaticArray } from "@egemengol/mina-credentials/dynamic";
+import { State as ContainsState } from "../unrolled_meta/contains";
 
 const LDS_256_MAX_LENGTH = 800;
 const LDS_512_MAX_LENGTH = 1200;

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@egemengol/mina-credentials": "^0.2.8",
+    "@noble/curves": "^1.8.1",
     "chalk": "^5.4.1",
     "log-update": "^6.1.0"
   }

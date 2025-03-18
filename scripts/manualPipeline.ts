@@ -1,34 +1,30 @@
 import fs from "node:fs";
 import path from "node:path";
-import {
-  Bytes,
-  Field,
-  Poseidon,
-  Proof,
-  VerificationKey,
-  ZkProgram,
-} from "o1js";
+import { Bytes, Field, Poseidon, VerificationKey, ZkProgram } from "o1js";
 import { DynamicSHA2 } from "@egemengol/mina-credentials";
 import { sha256 } from "@noble/hashes/sha256";
+import { secp256r1 } from "@noble/curves/p256";
 
 import { parseBundle } from "../src/parseBundle.ts";
 import { ProofCache } from "../src/proofCache";
 import { time } from "../src/timer.ts";
 import {
   Bytes32,
+  Bytes65,
   DG1_TD3,
   LDS_256_Step,
   LDS_256_LastStep,
   LDS_256_Verifier,
-  LDS_512_Step,
-  LDS_512_LastStep,
-  LDS_512_Verifier,
   LDS_256,
   SIGNED_ATTRS_256,
   DG1_TD3_256,
   LDS_DIGEST_BLOCKS_PER_ITERATION_256,
   LdsDigestState_256,
   SignedAttrs_256,
+  Field3,
+  VerifySignedAttrs_size256_sha256,
+  VerifySignedAttrs_size256_sha256_Input,
+  EcdsaSecp256r1,
 } from "../unrolled_leaves";
 import { Merger } from "../unrolled_meta/merger.ts";
 import {
@@ -172,7 +168,6 @@ async function main() {
   const pLDS_laststep = await ZkProgram.Proof(LDS_256_LastStep).fromJSON(
     JSON.parse(lastStepResult.proofJSON),
   );
-  // proofsLDS_step.push(lastStepProof);
   curState = new LdsDigestState_256(
     DynamicSHA2.finalizeOnly(curState, laststep),
   );
@@ -203,8 +198,6 @@ async function main() {
         ).proof;
       });
 
-      console.log("verify lds proof");
-
       return {
         proofJSON: JSON.stringify(proof.toJSON()),
         verificationKeyJSON: vkToJSON(vk),
@@ -212,12 +205,10 @@ async function main() {
     },
   );
 
-  console.log("here");
   const pLDS = await ZkProgram.Proof(LDS_256_Verifier).fromJSON(
     JSON.parse(ldsVerifierResult.proofJSON),
   );
   const vkLDS_verifier = vkFromJSON(ldsVerifierResult.verificationKeyJSON);
-  console.log("heree");
 
   // Process Signed Attrs
   const signedAttrsResult = await cache.getProof(
@@ -231,7 +222,6 @@ async function main() {
         return (await SignedAttrs_256.compile()).verificationKey;
       });
 
-      console.log("betw");
       const proof = await time("Proving signed attrs", async () => {
         return (
           await SignedAttrs_256._256(
@@ -253,7 +243,66 @@ async function main() {
   );
   const vkSignedAttrs = vkFromJSON(signedAttrsResult.verificationKeyJSON);
 
-  console.log("Leaves got created successfully!");
+  // Verify SignedAttrs with signature
+  // We need to extract the public key and signature from the bundle
+  const verifySignedAttrsResult = await cache.getProof(
+    path.resolve(
+      __dirname,
+      "../unrolled_leaves/verify_signedAttrs_size256_sha256.ts",
+    ),
+    {
+      signedAttrs: Array.from(bundle.signed_attrs),
+      signature_r: bundle.document_signature.r.toString(),
+      signature_s: bundle.document_signature.s.toString(),
+      pubkey_x: bundle.cert_local_pubkey.x.toString(),
+      pubkey_y: bundle.cert_local_pubkey.y.toString(),
+    },
+    async () => {
+      const vk = await time("Compiling verify signed attrs", async () => {
+        return (await VerifySignedAttrs_size256_sha256.compile())
+          .verificationKey;
+      });
+
+      const pubkeyPoint = new secp256r1.ProjectivePoint(
+        bundle.cert_local_pubkey.x,
+        bundle.cert_local_pubkey.y,
+        1n,
+      );
+      const pubkeySerial = pubkeyPoint.toRawBytes(false);
+
+      // Convert signature r and s bigints into Field3s
+      const signature = new EcdsaSecp256r1({
+        r: bundle.document_signature.r,
+        s: bundle.document_signature.s,
+      });
+      const signature_r = signature.r.toFields();
+      const signature_s = signature.s.toFields();
+      const input = new VerifySignedAttrs_size256_sha256_Input({
+        signedAttrs: SIGNED_ATTRS_256.from(bundle.signed_attrs),
+        pubkeySerial: Bytes65.from(pubkeySerial),
+        signature_r: Field3.from(signature_r),
+        signature_s: Field3.from(signature_s),
+      });
+
+      const proof = await time("Proving verify signed attrs", async () => {
+        return (await VerifySignedAttrs_size256_sha256.verifySign(input)).proof;
+      });
+
+      return {
+        proofJSON: JSON.stringify(proof.toJSON()),
+        verificationKeyJSON: vkToJSON(vk),
+      };
+    },
+  );
+
+  const pVerifySignedAttrs = await ZkProgram.Proof(
+    VerifySignedAttrs_size256_sha256,
+  ).fromJSON(JSON.parse(verifySignedAttrsResult.proofJSON));
+  const vkVerifySignedAttrs = vkFromJSON(
+    verifySignedAttrsResult.verificationKeyJSON,
+  );
+
+  console.log("🍃 Leaves! 🍃");
 
   const vks = [
     vkDG1,
@@ -261,9 +310,18 @@ async function main() {
     vkLDS_laststep,
     vkLDS_verifier,
     vkSignedAttrs,
+    vkVerifySignedAttrs,
   ];
+
   const rootProof = await generateRootProof(
-    [pDG1, ...proofsLDS_step, pLDS_laststep, pLDS, pSignedAttrs],
+    [
+      pDG1,
+      ...proofsLDS_step,
+      pLDS_laststep,
+      pLDS,
+      pSignedAttrs,
+      pVerifySignedAttrs,
+    ],
     vks,
     cache,
   );

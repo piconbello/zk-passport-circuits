@@ -5,6 +5,7 @@
       "name": "zk-passport-circuits",
       "dependencies": {
         "@egemengol/mina-credentials": "^0.2.8",
+        "@noble/curves": "^1.8.1",
         "chalk": "^5.4.1",
         "log-update": "^6.1.0",
       },
@@ -20,6 +21,8 @@
   },
   "packages": {
     "@egemengol/mina-credentials": ["@egemengol/mina-credentials@0.2.10", "", { "peerDependencies": { "o1js": "2.2.0" } }, "sha512-KUvSRStAdpwHpxf9Rjh6+iM8W1iRXvR0HaIS2W+EeItsHZW1fVqXpQzklZuew/5RJCI9iIiseXjEwa7nyZzDyg=="],
+
+    "@noble/curves": ["@noble/curves@1.8.1", "", { "dependencies": { "@noble/hashes": "1.7.1" } }, "sha512-warwspo+UYUPep0Q+vtdVB4Ugn8GGQj8iyB3gnRWsztmUHTI3S1nhdiWNsPUGL0vud7JlRRk1XEu7Lq1KGTnMQ=="],
 
     "@noble/hashes": ["@noble/hashes@1.7.1", "", {}, "sha512-B8XBPsn4vT/KJAGqDzbwztd+6Yte3P4V7iafm24bxgDe/mlRuK6xmWPuCNrKt2vDafZ8MfJLlchDG/vYafQEjQ=="],
 

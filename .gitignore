@@ -179,3 +179,4 @@ files
 justfile
 
 .proofcache
+scratch.ts

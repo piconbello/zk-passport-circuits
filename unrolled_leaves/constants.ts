@@ -1,4 +1,11 @@
-import { Bytes, UInt8 } from "o1js";
+import {
+  Bytes,
+  createEcdsa,
+  createForeignCurve,
+  Field,
+  UInt8,
+  Crypto,
+} from "o1js";
 
 import { DynamicBytes, StaticArray } from "@egemengol/mina-credentials/dynamic";
 
@@ -18,3 +25,12 @@ export class Bytes65 extends Bytes(65) {}
 export class Static65 extends StaticArray(UInt8, 65) {}
 
 export class Bytes32 extends Bytes(32) {}
+export class Bytes64 extends Bytes(64) {}
+
+export class DynSignedAttrs extends DynamicBytes({ maxLength: 200 }) {}
+
+export const Field3 = StaticArray(Field, 3);
+export class Secp256r1 extends createForeignCurve(
+  Crypto.CurveParams.Secp256r1,
+) {}
+export class EcdsaSecp256r1 extends createEcdsa(Secp256r1) {}

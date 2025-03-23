@@ -85,13 +85,13 @@ export interface MasterCert {
 //   return Uint8Array.fromBase64(b64);
 // }
 
-function b64ToBigint(b64: string): bigint {
+export function b64ToBigint(b64: string): bigint {
   const buffer = Buffer.from(b64, "base64");
   const hex = buffer.toString("hex");
   return BigInt("0x" + hex);
 }
 
-function decodeBase64(b64: string): Uint8Array {
+export function decodeBase64(b64: string): Uint8Array {
   const buffer = Buffer.from(b64, "base64");
   return new Uint8Array(buffer);
 }

@@ -180,3 +180,6 @@ justfile
 
 .proofcache
 scratch.ts
+
+dynamic
+o1js

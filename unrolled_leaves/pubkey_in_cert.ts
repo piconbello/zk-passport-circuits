@@ -3,9 +3,9 @@ import { Out } from "../unrolled_meta/out";
 import Contains from "../unrolled_meta/contains";
 import { State as ContainsState } from "../unrolled_meta/contains";
 import { DynamicBytes } from "@egemengol/mina-credentials";
+import { Certificate } from "./constants";
 // import { mapObject } from "../tests/common";
 
-export class PubkeyInCertCert extends DynamicBytes({ maxLength: 1500 }) {}
 export class PubkeyInCertChunk extends DynamicBytes({ maxLength: 500 }) {}
 export class PubkeyInCertNeedle extends DynamicBytes({ maxLength: 100 }) {}
 
@@ -59,11 +59,11 @@ export const PubkeyInCert = ZkProgram({
       },
     },
     validateContains: {
-      privateInputs: [Field, ContainsState, PubkeyInCertCert],
+      privateInputs: [Field, ContainsState, Certificate],
       async method(
         pubkeyDigest: Field,
         state: ContainsState,
-        cert: PubkeyInCertCert,
+        cert: Certificate,
       ) {
         state.processedNeedle.assertTrue();
         const certDigest = Contains.digest(Poseidon.initialState(), cert)[0];

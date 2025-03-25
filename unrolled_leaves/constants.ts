@@ -36,3 +36,5 @@ export class Secp256r1 extends createForeignCurve(
   Crypto.CurveParams.Secp256r1,
 ) {}
 export class EcdsaSecp256r1 extends createEcdsa(Secp256r1) {}
+
+export class Certificate extends DynamicBytes({ maxLength: 1500 }) {}

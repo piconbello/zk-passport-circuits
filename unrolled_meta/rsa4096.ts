@@ -2,6 +2,7 @@
  * RSA signature verification with o1js
  */
 import type { DynamicBytes } from "@egemengol/mina-credentials";
+import type { Bytes } from "o1js";
 import {
   Field,
   Gadgets,
@@ -11,6 +12,7 @@ import {
   Bool,
   UInt8,
 } from "o1js";
+import rsaMessageTemplateLimbs from "./rsaMessageTemplateLimbs.json" with { type: "json" };
 
 export { Bigint4096, rsaVerify, EXP_BIT_COUNT };
 
@@ -43,7 +45,7 @@ class Bigint4096 extends Struct({
     return this.fields;
   }
 
-  static from(x: bigint) {
+  static fromBigint(x: bigint) {
     let fields = [];
     let value = x;
     for (let i = 0; i < 36; i++) {
@@ -51,6 +53,23 @@ class Bigint4096 extends Struct({
       x >>= 116n;
     }
     return new Bigint4096({ fields, value: Unconstrained.from(value) });
+  }
+
+  static fromLimbs(limbs: Field[]) {
+    if (limbs.length !== 36) {
+      throw new Error("Expected 36 limbs for Bigint4096");
+    }
+
+    // Calculate the full bigint value from the limbs
+    let value = 0n;
+    for (let i = 0; i < 36; i++) {
+      value += BigInt(limbs[i].toString()) << BigInt(i * 116);
+    }
+
+    return new Bigint4096({
+      fields: RsaLimbs4096.fromFields(limbs),
+      value: Unconstrained.from(value),
+    });
   }
 
   static override check(x: { fields: Field[] }) {
@@ -90,7 +109,7 @@ function multiply(
       let p0 = p.toBigint();
       let q = xy / p0;
       let r = xy - q * p0;
-      return { q: Bigint4096.from(q), r: Bigint4096.from(r) };
+      return { q: Bigint4096.fromBigint(q), r: Bigint4096.fromBigint(r) };
     },
   );
 
@@ -146,7 +165,7 @@ function rsaVerify(
   modulus: Bigint4096,
   publicExponent: Field,
 ) {
-  const one = Bigint4096.from(1n);
+  const one = Bigint4096.fromBigint(1n);
   const bits = publicExponent.toBits(EXP_BIT_COUNT);
   let x = Provable.if(bits[EXP_BIT_COUNT - 1], signature, one);
   for (let i = EXP_BIT_COUNT - 2; i >= 0; i--) {
@@ -195,6 +214,69 @@ function assertLessThan16(i: Field, x: Field) {
 }
 
 /**
+ * Adds a byte value to the appropriate limb(s) at the specified bit position
+ *
+ * @param limbs - The array of limbs (116-bit Field elements)
+ * @param byte - The byte value to add
+ * @param bitPos - The absolute bit position where this byte should be placed
+ */
+function addByteToLimbs(limbs: Field[], byte: Field, bitPos: number): void {
+  // Determine which limb(s) this byte affects
+  // Each limb is 116 bits, so we divide by 116 to find the limb index
+  const limbIndex1 = Math.floor(bitPos / 116);
+
+  // A byte is 8 bits, so check if it crosses a limb boundary
+  const limbIndex2 = Math.floor((bitPos + 7) / 116);
+
+  // Calculate the bit offset within the first limb
+  const bitOffset1 = bitPos % 116;
+
+  // Calculate the multiplier needed to place the byte at the correct position in the limb
+  const multiplier1 = 2n ** BigInt(bitOffset1);
+
+  if (limbIndex1 === limbIndex2) {
+    // Case 1: The byte fits entirely within a single limb
+    // Simply multiply by the appropriate power of 2 and add to the limb
+    limbs[limbIndex1] = limbs[limbIndex1].add(byte.mul(Field(multiplier1)));
+  } else {
+    // Case 2: The byte straddles two limbs
+    // We need to split it into two parts and add each part to the appropriate limb
+
+    // Calculate how many bits go into the first limb
+    const bitsInFirstLimb = 116 - bitOffset1;
+
+    // Use witnesses to split the byte efficiently in the circuit
+    const lowPart = Provable.witness(UInt8, () => {
+      const byteValue = Number(byte.toBigInt());
+      // The lower part is the remainder when divided by 2^bitsInFirstLimb
+      return UInt8.from(byteValue % (1 << bitsInFirstLimb));
+    });
+
+    const highPart = Provable.witness(UInt8, () => {
+      const byteValue = Number(byte.toBigInt());
+      // The higher part is the quotient when divided by 2^bitsInFirstLimb
+      return UInt8.from(Math.floor(byteValue / (1 << bitsInFirstLimb)));
+    });
+
+    // Enforce the constraint that lowPart and highPart correctly reconstruct the original byte
+    // This is critical for circuit validity
+    const twoToBitsInFirstLimb = Field(2n ** BigInt(bitsInFirstLimb));
+    byte.assertEquals(
+      lowPart.value.add(highPart.value.mul(twoToBitsInFirstLimb)),
+    );
+
+    // Add the contributions to their respective limbs
+    // The low part goes in the first limb at position bitOffset1
+    limbs[limbIndex1] = limbs[limbIndex1].add(
+      lowPart.value.mul(Field(multiplier1)),
+    );
+
+    // The high part goes in the second limb at position 0
+    limbs[limbIndex2] = limbs[limbIndex2].add(highPart.value);
+  }
+}
+
+/**
  * Converts a big-endian encoded RSA modulus into an array of 36 limbs of 116 bits each
  * to support efficient circuit computations. This representation is needed because
  * o1js (and ZK systems generally) can't directly handle the full 4096-bit RSA modulus.
@@ -223,43 +305,7 @@ export function parseModulusIntoLimbs(enc: DynamicBytes, offset: Field) {
     const reversedByteIndex = 511 - byteIndex;
     const bitPos = reversedByteIndex * 8;
 
-    // Determine which limb(s) this byte affects - a byte might straddle a limb boundary
-    const limbIndex1 = Math.floor(bitPos / 116);
-    const limbIndex2 = Math.floor((bitPos + 7) / 116);
-    const bitOffset1 = bitPos % 116;
-    const multiplier1 = 2n ** BigInt(bitOffset1);
-
-    if (limbIndex1 === limbIndex2) {
-      // Simple case: byte fits within a single limb
-      limbs[limbIndex1] = limbs[limbIndex1].add(byte.mul(Field(multiplier1)));
-    } else {
-      // Complex case: byte straddles two limbs, requiring a split
-      // We use ZK witnesses to split the byte value efficiently while maintaining constraints
-      const bitsInFirstLimb = 116 - bitOffset1;
-
-      const lowPart = Provable.witness(UInt8, () => {
-        const byteValue = Number(byte.toBigInt());
-        return UInt8.from(byteValue % (1 << bitsInFirstLimb));
-      });
-
-      const highPart = Provable.witness(UInt8, () => {
-        const byteValue = Number(byte.toBigInt());
-        return UInt8.from(Math.floor(byteValue / (1 << bitsInFirstLimb)));
-      });
-
-      // Enforce the constraint that the parts correctly reconstruct the original byte
-      // This is essential for circuit validity
-      const twoToBitsInFirstLimb = Field(2n ** BigInt(bitsInFirstLimb));
-      byte.assertEquals(
-        lowPart.value.add(highPart.value.mul(twoToBitsInFirstLimb)),
-      );
-
-      // Add contributions to the appropriate limbs with correct scaling
-      limbs[limbIndex1] = limbs[limbIndex1].add(
-        lowPart.value.mul(Field(multiplier1)),
-      );
-      limbs[limbIndex2] = limbs[limbIndex2].add(highPart.value);
-    }
+    addByteToLimbs(limbs, byte, bitPos);
   }
 
   return limbs;
@@ -368,4 +414,51 @@ export function parseRSAfromPkcs1LongLongShort4096(
     modulusLimbs,
     exponentValue,
   };
+}
+
+export function rsaMessageFromDigest(
+  digest: Bytes,
+  keySizeBits: bigint,
+): Field[] {
+  if (keySizeBits !== 4096n) throw new Error("not supported yet");
+
+  let limbsDecimalStrs: string[];
+  if (digest.length === 32) {
+    limbsDecimalStrs =
+      rsaMessageTemplateLimbs.rsa_message_templates["SHA2-256,4096"].limbs;
+  } else if (digest.length === 64) {
+    limbsDecimalStrs =
+      rsaMessageTemplateLimbs.rsa_message_templates["SHA2-512,4096"].limbs;
+  } else {
+    throw new Error("unsupported digest length");
+  }
+  // Convert template string values to Field elements
+  const limbs = limbsDecimalStrs.map((s) => Field.fromValue(s));
+
+  // In PKCS #1 v1.5 padding for RSA signature verification:
+  // 1. The digest appears at the end of the padded message
+  // 2. Our limbs are stored in little-endian format (least significant bits first)
+  // 3. Therefore, the digest should be placed at the beginning of our limbs array
+  //    (which corresponds to the end of the message in big-endian format)
+
+  // The template is structured with zeros in the first few limbs precisely
+  // to reserve space for the digest to be added
+
+  // Process each byte of the digest
+  for (let byteIndex = 0; byteIndex < digest.length; byteIndex++) {
+    const byte = digest.bytes.at(byteIndex)!.value;
+
+    // We process the digest in reverse byte order because:
+    // 1. The digest is stored in big-endian format (most significant byte first)
+    // 2. We need to insert it into our little-endian limb structure
+    const reversedByteIndex = digest.length - 1 - byteIndex;
+
+    // Calculate bit position in the overall message
+    const bitPos = reversedByteIndex * 8;
+
+    // Add this byte to the appropriate limb(s)
+    addByteToLimbs(limbs, byte, bitPos);
+  }
+
+  return limbs;
 }

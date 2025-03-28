@@ -13,7 +13,7 @@ import {
   Bool,
 } from "o1js";
 
-export { Bigint4096, rsaVerify, EXP_BIT_COUNT };
+export { Bigint4096, rsaVerify, rsaDecrypt, EXP_BIT_COUNT };
 
 const mask = (1n << 116n) - 1n;
 
@@ -150,8 +150,7 @@ function multiply(
 
 const zero = Field.from(0n);
 
-function rsaVerify(
-  message: Bigint4096,
+function rsaDecrypt(
   signature: Bigint4096,
   modulus: Bigint4096,
   publicExponent: Field,
@@ -163,6 +162,16 @@ function rsaVerify(
     x = modulus.modSquare(x);
     x = modulus.modMul(x, Provable.if(bits[i], signature, one));
   }
+  return x;
+}
+
+function rsaVerify(
+  message: Bigint4096,
+  signature: Bigint4096,
+  modulus: Bigint4096,
+  publicExponent: Field,
+) {
+  const x = rsaDecrypt(signature, modulus, publicExponent);
   Provable.assertEqual(Bigint4096, message, x);
 }
 

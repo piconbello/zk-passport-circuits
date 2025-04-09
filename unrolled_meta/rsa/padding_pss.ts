@@ -1,4 +1,4 @@
-import { SHA2, type DynamicBytes } from "@egemengol/mina-credentials";
+import { SHA2 } from "@egemengol/mina-credentials";
 import { Field } from "o1js";
 import data from "../../files/pss.short.json" with { type: "json" };
 import { Bytes, Gadgets, UInt8 } from "o1js";
@@ -62,9 +62,7 @@ function xorUInt8Arrays(a: UInt8[], b: UInt8[]) {
   return res;
 }
 
-function pssVerifySalt() {}
-
-function pssVerify(
+export function pssVerify(
   encodedMessage: UInt8[],
   encodedMessageBits: bigint,
   messageDigest: Bytes,
@@ -152,4 +150,4 @@ function main() {
   pssVerify(emProvable, 4095n, Bytes.from(sha256(msg)), 32, 32);
 }
 
-main();
+// main();

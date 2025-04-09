@@ -11,7 +11,7 @@ import {
 // --- Constants ---
 const LIMB_BIT_SIZE = 116n;
 const LIMB_MAX_VALUE = (1n << LIMB_BIT_SIZE) - 1n;
-const EXP_BIT_COUNT = 20; // Example
+export const EXP_BIT_COUNT = 20; // Example
 
 // --- Range Check Gadgets ---
 function rangeCheck116(x: Field) {
@@ -81,7 +81,7 @@ interface ProvableBigintInstance {
   assertEquals(other: this, message?: string): void;
 }
 
-interface ProvableBigintStatic<
+export interface ProvableBigintStatic<
   T extends ProvableBigintInstance,
   V = { fields: Field[] },
 > extends ProvableExtended<T, V> {
@@ -95,7 +95,7 @@ interface ProvableBigintStatic<
 }
 
 // --- Base Class (Instance Logic) ---
-class ProvableBigintBase implements ProvableBigintInstance {
+export class ProvableBigintBase implements ProvableBigintInstance {
   fields: Field[];
 
   constructor(value: { fields: Field[] }) {

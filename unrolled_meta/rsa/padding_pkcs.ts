@@ -12,125 +12,6 @@ import type {
 } from "./provableBigint";
 
 /**
- * Parses an RSA public key from PKCS#1 DER encoding (SEQUENCE { modulus INTEGER, exponent INTEGER }).
- * This function is generic and requires the specific ProvableBigint static type
- * corresponding to the expected key size to be passed in.
- * Assumes standard "long long short" length encodings common for RSA keys.
- *
- * @template T - The specific ProvableBigint type (e.g., ProvableBigint2048).
- * @param StaticType - The static class (`ProvableBigintStatic`) for the target bigint size.
- * @param enc - The byte array containing the DER-encoded key.
- * @param startOffset - The starting Field position of the key within `enc`.
- * @returns An object containing the parsed modulus (as type T) and exponent (as Field).
- */
-export function parseRSAfromPkcs1<T extends ProvableBigintBase>(
-  StaticType: ProvableBigintStatic<T>,
-  enc: DynamicBytes,
-  startOffset: Field,
-): { modulus: T; exponentValue: Field } {
-  // HEADER PARSING
-  let cursor: Field = startOffset;
-
-  // SEQUENCE tag
-  enc
-    .getOrUnconstrained(cursor)
-    .assertEquals(UInt8.from(48), "Expected SEQUENCE tag (0x30)");
-  cursor = cursor.add(1);
-
-  // --- SEQUENCE Length (assuming long form for typical keys) ---
-  // Check for long-form length indicator (0x82 means length is in next 2 bytes)
-  // Note: Smaller keys *might* use short form or 0x81, this assumes typical > 255 byte total structure
-  enc
-    .getOrUnconstrained(cursor)
-    .assertEquals(
-      UInt8.from(130),
-      "Expected long-form length indicator (0x82) for SEQUENCE",
-    );
-  cursor = cursor.add(1);
-  // We don't strictly need the sequence length value itself, just skip the length bytes
-  cursor = cursor.add(2); // Skip the 2 bytes specifying the sequence length
-
-  // --- Modulus INTEGER ---
-  // INTEGER tag for modulus
-  enc
-    .getOrUnconstrained(cursor)
-    .assertEquals(UInt8.from(2), "Expected INTEGER tag (0x02) for modulus");
-  cursor = cursor.add(1);
-
-  // Modulus Length (assuming long form for typical keys)
-  enc
-    .getOrUnconstrained(cursor)
-    .assertEquals(
-      UInt8.from(130),
-      "Expected long-form length indicator (0x82) for modulus length",
-    );
-  cursor = cursor.add(1);
-
-  // Read modulus length bytes (2 bytes)
-  const modulusLengthHigh = enc.getOrUnconstrained(cursor).value;
-  cursor = cursor.add(1);
-  const modulusLengthLow = enc.getOrUnconstrained(cursor).value;
-  cursor = cursor.add(1);
-
-  // Calculate modulus length as a Field
-  let modulusLengthField = modulusLengthHigh.mul(256).add(modulusLengthLow);
-
-  // Handle potential leading zero byte for positive integers
-  // Read the first byte of the modulus value
-  const modulusHead = enc.getOrUnconstrained(cursor);
-  const hasLeadingZero = modulusHead.value.equals(Field(0));
-
-  // Adjust cursor and length field if leading zero exists
-  cursor = cursor.add(hasLeadingZero.toField()); // Advance cursor by 1 if leading zero
-  modulusLengthField = modulusLengthField.sub(hasLeadingZero.toField()); // Decrease length by 1 if leading zero
-
-  // --- ASSERTION: Check consistency with StaticType ---
-  // Calculate the expected number of bytes based on the ProvableBigint type provided
-  const expectedModulusBytes = StaticType.bitSize / 8;
-  assert(
-    Number.isInteger(expectedModulusBytes),
-    `StaticType.bitSize (${StaticType.bitSize}) must be a multiple of 8`,
-  );
-
-  // Assert that the length read from DER matches the expected length for this key size
-  modulusLengthField.assertEquals(
-    Field(expectedModulusBytes),
-    `Modulus length in DER does not match expected ${expectedModulusBytes} bytes for ${StaticType.bitSize}-bit key`,
-  );
-
-  // --- Parse Modulus Limbs ---
-  // Call the generic parsing function, passing the StaticType and the *expected* (and asserted) length as a number
-  const modulus: T = parseModulusIntoLimbs<T>(
-    StaticType,
-    enc,
-    cursor,
-    expectedModulusBytes, // Pass the JS number expected length
-  );
-
-  // Advance cursor past the modulus bytes
-  cursor = cursor.add(expectedModulusBytes);
-
-  // --- EXPONENT PARSING ---
-  // INTEGER tag for exponent
-  enc
-    .getOrUnconstrained(cursor)
-    .assertEquals(UInt8.from(2), "Expected INTEGER tag (0x02) for exponent");
-  cursor = cursor.add(1);
-
-  // Parse the exponent value (handles short-form length internally)
-  const exponentValue = parseExponent(enc, cursor);
-
-  // Note: We don't need to advance the cursor further based on exponent length here,
-  // as parseExponent reads the length byte and we only return the value.
-  // If subsequent fields were parsed, we'd need to calculate the exponent field length.
-
-  return {
-    modulus, // Parsed modulus as type T
-    exponentValue, // Parsed exponent as Field
-  };
-}
-
-/**
  * Constructs the PKCS#1 v1.5 padded message for RSA signature verification.
  * EMSA-PKCS1-v1_5 = 0x00 || 0x01 || PS || 0x00 || T
  * Where T is the DER encoding of the DigestInfo (hash algorithm + digest)
@@ -148,8 +29,8 @@ export function rsaMessageFromDigest<T extends ProvableBigintBase>(
   StaticType: ProvableBigintStatic<T>,
   digest: Bytes,
 ): T {
-  const keySize = StaticType.bitSize;
-  const numLimbs = StaticType.numLimbs;
+  const keySize = StaticType._bitSize;
+  const numLimbs = StaticType._numLimbs;
   let hashAlgoName: string;
   let digestLength: number;
 

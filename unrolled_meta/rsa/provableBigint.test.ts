@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Field, Provable, Bool } from "o1js";
-import { createProvableBigint, multiply, rsaVerify } from "./provableBigint"; // Adjust path if needed
+import { createProvableBigint, rsaExponentiation } from "./provableBigint"; // Adjust path if needed
 
 // --- Constants from provableBigint.ts ---
 const LIMB_BIT_SIZE = 116n;
@@ -160,7 +160,7 @@ function generateTestSuite(bitSize: number) {
         123n,
         LIMB_MAX_VALUE,
         LIMB_MAX_VALUE + 5n,
-        (1n << (LIMB_BIT_SIZE * BigInt(ProvableBigintN.numLimbs / 2))) + 1n,
+        (1n << (LIMB_BIT_SIZE * BigInt(ProvableBigintN._NUM_LIMBS / 2))) + 1n,
         (1n << BigInt(bitSize - 2)) - 1n,
         (1n << BigInt(bitSize)) - 1n - 12345n,
       ];
@@ -187,9 +187,10 @@ function generateTestSuite(bitSize: number) {
 
       it(`should throw for value >= 2^${bitSize}`, () => {
         const tooLarge = 1n << BigInt(bitSize);
+        const maxAllowed = tooLarge - 1n;
         expect(() => ProvableBigintN.fromBigint(tooLarge)).toThrow(
-          new RegExp(
-            `Input bigint ${tooLarge} is too large for ${bitSize} bits`,
+          new RegExp( // Use RegExp to match the dynamic message
+            `Input bigint ${tooLarge} is too large for ${bitSize} bits \\(max is ${maxAllowed}\\)`,
           ),
         );
       });
@@ -242,7 +243,7 @@ function generateTestSuite(bitSize: number) {
             p_pb.checkLimbs();
 
             // Call multiply without explicit instance type generic
-            const result_pb = multiply(ProvableBigintN, x_pb, y_pb, p_pb);
+            const result_pb = ProvableBigintN.modMul(x_pb, y_pb, p_pb);
 
             result_pb.checkLimbs();
             result_pb.assertEquals(
@@ -259,9 +260,11 @@ function generateTestSuite(bitSize: number) {
             const x_pb = ProvableBigintN.fromBigint(10n);
             const y_pb = ProvableBigintN.fromBigint(20n);
             const p_pb = ProvableBigintN.fromBigint(0n);
-            multiply(ProvableBigintN, x_pb, y_pb, p_pb); // No explicit generic needed
+            ProvableBigintN.modMul(x_pb, y_pb, p_pb);
           }),
-        ).rejects.toThrow("Modulus (p) cannot be zero in multiply witness");
+        ).rejects.toThrow(
+          "_multiplyLimbs: Modulus (p) cannot be zero in witness generation",
+        );
       });
     });
 
@@ -368,13 +371,9 @@ function generateTestSuite(bitSize: number) {
 
           for (let i = 0; i < expBitCount; i++) {
             const multiplyFlag = e_bits[i];
-            let multiplied = multiply(
-              ProvableBigintN,
-              c_pb,
-              currentPower_e,
-              N_pb,
-            );
+            let multiplied = ProvableBigintN.modMul(c_pb, currentPower_e, N_pb);
             // Pass ProvableBigintN as the type to Provable.if
+            // @ts-ignore
             c_pb = Provable.if(multiplyFlag, ProvableBigintN, multiplied, c_pb);
             currentPower_e = ProvableBigintN.modSquare(currentPower_e, N_pb);
           }
@@ -387,12 +386,12 @@ function generateTestSuite(bitSize: number) {
 
           for (let i = 0; i < expBitCount; i++) {
             const multiplyFlag = d_bits[i];
-            let multiplied = multiply(
-              ProvableBigintN,
+            let multiplied = ProvableBigintN.modMul(
               m_prime_pb,
               currentPower_d,
               N_pb,
             );
+            // @ts-ignore
             m_prime_pb = Provable.if(
               multiplyFlag,
               ProvableBigintN,
@@ -470,7 +469,17 @@ function generateTestSuite(bitSize: number) {
           N_pb.checkLimbs();
 
           // Call the function under test
-          rsaVerify(ProvableBigintN, m_pb, s_pb, N_pb, e_field, expBitCount);
+          const calculated_m_pb = rsaExponentiation(
+            ProvableBigintN,
+            s_pb,
+            N_pb,
+            e_field,
+            expBitCount,
+          );
+          calculated_m_pb.assertEquals(
+            m_pb,
+            "RSA signature verification failed",
+          );
         });
       }, 600000); // Timeout needed
 
@@ -515,13 +524,16 @@ function generateTestSuite(bitSize: number) {
             s_invalid_pb.checkLimbs();
             N_pb.checkLimbs();
 
-            rsaVerify(
+            const calculated_m_pb = rsaExponentiation(
               ProvableBigintN,
-              m_pb,
               s_invalid_pb,
               N_pb,
               e_field,
               expBitCount,
+            );
+            calculated_m_pb.assertEquals(
+              m_pb,
+              "RSA signature verification failed",
             );
           }),
         ).rejects.toThrow(
@@ -537,7 +549,7 @@ function generateTestSuite(bitSize: number) {
           const y = ProvableBigintN.fromBigint(456n);
           const p = ProvableBigintN.fromBigint(1n);
           const expected = ProvableBigintN.fromBigint(0n);
-          const result = multiply(ProvableBigintN, x, y, p);
+          const result = ProvableBigintN.modMul(x, y, p);
           result.assertEquals(expected);
         });
       });
@@ -550,7 +562,7 @@ function generateTestSuite(bitSize: number) {
           const y = ProvableBigintN.fromBigint(5n);
           const p = ProvableBigintN.fromBigint(pVal);
           const expected = ProvableBigintN.fromBigint(0n);
-          const result = multiply(ProvableBigintN, x, y, p);
+          const result = ProvableBigintN.modMul(x, y, p);
           result.assertEquals(expected);
         });
       });
@@ -572,7 +584,7 @@ function generateTestSuite(bitSize: number) {
       it("should fail checkLimbs for out-of-range limb", async () => {
         const badLimb = Field(1n << LIMB_BIT_SIZE); // Value too large
         const validLimb = Field(1n);
-        const numLimbs = ProvableBigintN.numLimbs;
+        const numLimbs = ProvableBigintN._NUM_LIMBS;
         if (numLimbs < 1) return; // Should not happen
 
         const limbs = Array(numLimbs).fill(validLimb);
@@ -592,16 +604,15 @@ function generateTestSuite(bitSize: number) {
         // Similar setup as above
         const badLimb = Field(1n << LIMB_BIT_SIZE);
         const validLimb = Field(1n);
-        const numLimbs = ProvableBigintN.numLimbs;
+        const numLimbs = ProvableBigintN._NUM_LIMBS;
         if (numLimbs < 1) return;
         const limbs = Array(numLimbs).fill(validLimb);
         limbs[0] = badLimb;
 
         expect(
           Provable.runAndCheck(() => {
-            const structValue = { fields: limbs };
-            const instance = new (ProvableBigintN as any)(structValue);
-            ProvableBigintN.check(instance); // This calls instance.checkLimbs() internally
+            const bn = ProvableBigintN.fromFields(limbs);
+            bn.checkLimbs();
           }),
         ).rejects.toThrow(/Constraint unsatisfied/);
       });

@@ -1,5 +1,6 @@
-import { UInt8, Field } from "o1js";
+import { UInt8, Field, Poseidon, Provable } from "o1js";
 import type { Bytes65 } from "./constants";
+import type { DynamicBytes } from "@egemengol/mina-credentials";
 
 export function assertSubarray(
   haystack: UInt8[],
@@ -71,4 +72,17 @@ export function bytesToLimbBE(bytes_: UInt8[]) {
     limb = limb.mul(1n << 8n).add(bytes[i]);
   }
   return limb.seal();
+}
+
+export function hashBytewisePoseidon(db: DynamicBytes): Field {
+  let state = Poseidon.initialState();
+  db.forEach((u8, isDummy, _i) => {
+    state = Provable.if(
+      isDummy,
+      // @ts-ignore
+      state,
+      Poseidon.update(state, [u8.value]),
+    );
+  });
+  return state[0];
 }

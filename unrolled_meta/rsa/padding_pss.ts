@@ -1,11 +1,10 @@
 import { SHA2 } from "@egemengol/mina-credentials";
-import { Field } from "o1js";
+import { Field, Provable } from "o1js";
 import data from "../../files/pss.short.json" with { type: "json" };
 import { Bytes, Gadgets, UInt8 } from "o1js";
 import { assert } from "o1js";
 import { sha256 } from "@noble/hashes/sha256";
-
-type Length = 28 | 32 | 48 | 64;
+import type { Length } from "./constants";
 
 function counterUint8s(counterValue: bigint) {
   if (counterValue < 0n || counterValue > 0xffffffffn) {
@@ -62,13 +61,27 @@ function xorUInt8Arrays(a: UInt8[], b: UInt8[]) {
   return res;
 }
 
+// Helper function to log UInt8 array values inside asProver
+// function logUInt8Array(label: string, arr: UInt8[], maxLen = 48) {
+//   Provable.asProver(() => {
+//     const bytes = arr.map((u) => u.value.toBigInt());
+//     const displayBytes = bytes
+//       .slice(0, maxLen)
+//       .map((b) => b.toString(16).padStart(2, "0"));
+//     const ellipsis = bytes.length > maxLen ? "..." : "";
+//     console.log(
+//       `${label} (len ${arr.length}): [${displayBytes.join(", ")}${ellipsis}]`,
+//     );
+//   });
+// }
+
 export function pssVerify(
   encodedMessage: UInt8[],
   encodedMessageBits: bigint,
   messageDigest: Bytes,
-  digestSizeBytes: Length,
   saltSizeBytes: number,
 ) {
+  const digestSizeBytes = messageDigest.length as Length;
   const em = encodedMessage;
   const mHash = messageDigest;
   const sLen = saltSizeBytes;
@@ -96,6 +109,7 @@ export function pssVerify(
   // Set the leftmost 8 * emLen - emBits bits of the leftmost octet in DB to zero
   const andMask = BigInt(0xff) >> (8n * BigInt(em.length) - encodedMessageBits);
   const firstField = Gadgets.and(db[0].value, Field.from(andMask), 8);
+
   db[0] = UInt8.Unsafe.fromField(firstField);
 
   for (let i = 0; i < em.length - digestSizeBytes - saltSizeBytes - 2; i++) {
@@ -147,7 +161,7 @@ function main() {
   const em = Buffer.from(data.encoded_message_hex, "hex");
   const emProvable = Array.from(em).map((u8) => UInt8.from(u8));
 
-  pssVerify(emProvable, 4095n, Bytes.from(sha256(msg)), 32, 32);
+  pssVerify(emProvable, 4095n, Bytes.from(sha256(msg)), 32);
 }
 
 // main();

@@ -5,25 +5,25 @@ import {
   Struct,
   Bool,
   assert,
-  type ProvableExtended,
+  type ProvablePure,
 } from "o1js";
 
-// --- Constants ---
 const LIMB_BIT_SIZE = 116n;
 const LIMB_MAX_VALUE = (1n << LIMB_BIT_SIZE) - 1n;
-export const EXP_BIT_COUNT = 20; // Example
+export const EXP_BIT_COUNT = 20;
 
-// --- Range Check Gadgets ---
 function rangeCheck116(x: Field) {
   let [x0, x1] = Provable.witnessFields(2, () => [
     x.toBigInt() & ((1n << 64n) - 1n),
     x.toBigInt() >> 64n,
   ]);
-
   Gadgets.rangeCheck64(x0);
   let [x52] = Gadgets.rangeCheck64(x1);
-  x52.assertEquals(0n);
-  x0.add(x1.mul(1n << 64n)).assertEquals(x);
+  x52.assertEquals(0n, "RangeCheck116: Upper 52 bits must be zero");
+  x0.add(x1.mul(1n << 64n)).assertEquals(
+    x,
+    "RangeCheck116: Limb reconstruction failed",
+  );
 }
 
 function rangeCheck128Signed(xSigned: Field) {
@@ -34,363 +34,354 @@ function rangeCheck128Signed(xSigned: Field) {
   ]);
   Gadgets.rangeCheck64(x0);
   Gadgets.rangeCheck64(x1);
-  x0.add(x1.mul(1n << 64n)).assertEquals(x);
+  x0.add(x1.mul(1n << 64n)).assertEquals(
+    x,
+    "RangeCheck128Signed: Value reconstruction failed",
+  );
 }
 
-// --- Core Static Math on Limbs (Placeholders/Conceptual) ---
-// These would contain the actual multi-precision logic using Gadgets.
-// For now, they are conceptual placeholders. Actual implementation
-// requires careful use of Gadgets.add, Gadgets.mul, Gadgets.carry etc.
-// The `multiply` function below shows a more concrete example using Gadgets.multiplication.
-
-function checkLimbs(limbs: Field[], numLimbs: number) {
+function _checkLimbs(limbs: Field[], numLimbs: number) {
   assert(
     limbs.length === numLimbs,
-    `checkLimbs: Expected ${numLimbs} limbs, got ${limbs.length}`,
+    `Expected ${numLimbs} limbs, got ${limbs.length}`,
   );
   limbs.forEach(rangeCheck116);
 }
 
-function limbsToBigint(limbs: Field[]): bigint {
+function _limbsToBigint(limbs: Field[]): bigint {
   let value = 0n;
   for (let i = 0; i < limbs.length; i++) {
-    value += BigInt(limbs[i].toString()) << (BigInt(i) * LIMB_BIT_SIZE);
+    value += limbs[i].toBigInt() << (BigInt(i) * LIMB_BIT_SIZE);
   }
   return value;
 }
 
-function assertEqualsLimbs(
+function _bigintToLimbs(x: bigint, numLimbs: number, bitSize: number): Field[] {
+  assert(x >= 0n, `Input bigint ${x} must be non-negative`);
+  const maxVal = 1n << BigInt(bitSize);
+  assert(
+    x < maxVal,
+    `Input bigint ${x} is too large for ${bitSize} bits (max is ${maxVal - 1n})`,
+  );
+  let fields: Field[] = [];
+  let currentBigint = x;
+  for (let i = 0; i < numLimbs; i++) {
+    const limb = currentBigint & LIMB_MAX_VALUE;
+    fields.push(Field(limb));
+    currentBigint >>= LIMB_BIT_SIZE;
+  }
+  assert(
+    currentBigint === 0n,
+    `_bigintToLimbs: Conversion failed, non-zero remainder ${currentBigint}`,
+  );
+  while (fields.length < numLimbs) {
+    fields.push(Field(0));
+  }
+  return fields;
+}
+
+function _assertEqualsLimbs(
   limbsA: Field[],
   limbsB: Field[],
   message?: string,
 ): void {
-  assert(limbsA.length === limbsB.length, message);
+  assert(
+    limbsA.length === limbsB.length,
+    `_assertEqualsLimbs: Limb arrays must have the same length (${limbsA.length} vs ${limbsB.length})`,
+  );
   for (let i = 0; i < limbsA.length; i++) {
     limbsA[i].assertEquals(limbsB[i], message);
   }
 }
 
-// --- Type Definitions ---
-
-interface ProvableBigintInstance {
-  fields: Field[];
-  modMul(y: this, p: this): this;
-  toBigint(): bigint;
-  toFields(): Field[];
-  checkLimbs(): void;
-  assertEquals(other: this, message?: string): void;
-}
-
-export interface ProvableBigintStatic<
-  T extends ProvableBigintInstance,
-  V = { fields: Field[] },
-> extends ProvableExtended<T, V> {
-  readonly bitSize: number;
-  readonly numLimbs: number;
-  readonly LimbsProvableType: ProvableExtended<Field[], bigint[]>;
-
-  fromBigint(x: bigint): T;
-  fromLimbs(limbs: Field[]): T;
-  modSquare(x: T, p: T): T;
-}
-
-// --- Base Class (Instance Logic) ---
-export class ProvableBigintBase implements ProvableBigintInstance {
-  fields: Field[];
-
-  constructor(value: { fields: Field[] }) {
-    this.fields = value.fields;
-  }
-
-  modMul(y: this, p: this): this {
-    assert(
-      this.constructor === y.constructor && this.constructor === p.constructor,
-      "modMul operands must be of the same ProvableBigint type",
-    );
-    const StaticType = this
-      .constructor as unknown as ProvableBigintStatic<this>;
-    return multiply<this>(StaticType, this, y, p);
-  }
-
-  toBigint(): bigint {
-    return limbsToBigint(this.fields);
-  }
-
-  toFields(): Field[] {
-    return this.fields;
-  }
-
-  checkLimbs(): void {
-    const StaticType = this
-      .constructor as unknown as ProvableBigintStatic<this>;
-    checkLimbs(this.fields, StaticType.numLimbs);
-  }
-
-  assertEquals(other: this, message?: string): void {
-    assertEqualsLimbs(this.fields, other.fields, message);
-  }
-}
-
-// --- Factory Function ---
-export function createProvableBigint(
-  bitSize: number,
-): ProvableBigintStatic<ProvableBigintBase> {
+function _assertNotEqualsLimbs(
+  limbsA: Field[],
+  limbsB: Field[],
+  message?: string,
+): void {
   assert(
-    bitSize > 0 && bitSize % 8 === 0,
-    `ProvableBigint bitSize must be positive and typically a multiple of 8, got ${bitSize}`,
+    limbsA.length === limbsB.length,
+    `_assertNotEqualsLimbs: Limb arrays must have the same length (${limbsA.length} vs ${limbsB.length})`,
   );
-  const numLimbs = Math.ceil(bitSize / Number(LIMB_BIT_SIZE));
-  const LimbsProvableType_ = Provable.Array(Field, numLimbs);
+  let allEqual = Bool(true);
+  for (let i = 0; i < limbsA.length; i++) {
+    allEqual = allEqual.and(limbsA[i].equals(limbsB[i]));
+  }
+  allEqual.assertFalse(message);
+}
 
-  const ProvableBigintStruct = Struct({
-    fields: LimbsProvableType_,
+function _multiplyLimbs(
+  xLimbs: Field[],
+  yLimbs: Field[],
+  pLimbs: Field[],
+  numLimbs: number,
+  bitSize: number,
+  LimbsProvableType: ProvablePure<Field[]>,
+  { isSquare = false } = {},
+) {
+  const limbBitSize = LIMB_BIT_SIZE;
+  const limbSizeMultiplier = 1n << limbBitSize;
+
+  assert(
+    xLimbs.length === yLimbs.length &&
+      xLimbs.length === pLimbs.length &&
+      xLimbs.length === numLimbs,
+    `_multiplyLimbs: Input limb arrays must have length ${numLimbs}`,
+  );
+  const totalLimbCapacity = numLimbs * Number(LIMB_BIT_SIZE);
+  assert(
+    bitSize <= totalLimbCapacity,
+    `_multiplyLimbs: bitSize (${bitSize}) cannot exceed total limb capacity (${totalLimbCapacity})`,
+  );
+
+  const WitnessStruct = Struct({
+    qLimbs: LimbsProvableType,
+    rLimbs: LimbsProvableType,
   });
 
-  class ProvableBigint_N extends ProvableBigintBase {
-    static readonly bitSize = bitSize;
-    static readonly numLimbs = numLimbs;
-    static readonly LimbsProvableType = LimbsProvableType_ as ProvableExtended<
-      Field[],
-      bigint[]
-    >;
+  let witnessedLimbs = Provable.witness(WitnessStruct, () => {
+    let xVal = _limbsToBigint(xLimbs);
+    let yVal = isSquare ? xVal : _limbsToBigint(yLimbs);
+    let pVal = _limbsToBigint(pLimbs);
+    if (pVal === 0n)
+      throw new Error(
+        "_multiplyLimbs: Modulus (p) cannot be zero in witness generation",
+      );
 
-    constructor(value: { fields: Field[] }) {
-      // Input validation: Ensure correct number of fields
-      if (value.fields.length !== ProvableBigint_N.numLimbs) {
-        throw new Error(
-          `ProvableBigint_${bitSize}: Expected ${ProvableBigint_N.numLimbs} limbs, got ${value.fields.length}`,
+    let xy = xVal * yVal;
+    let qVal = xy / pVal;
+    let rVal = xy % pVal;
+    if (rVal < 0n) rVal += pVal;
+
+    // Use totalLimbCapacity for witness generation to avoid premature clipping
+    let qLimbsWitness = _bigintToLimbs(qVal, numLimbs, totalLimbCapacity);
+    let rLimbsWitness = _bigintToLimbs(rVal, numLimbs, totalLimbCapacity); // r should fit bitSize ideally
+
+    return new WitnessStruct({ qLimbs: qLimbsWitness, rLimbs: rLimbsWitness });
+  });
+
+  const qLimbs = witnessedLimbs.qLimbs;
+  const rLimbs = witnessedLimbs.rLimbs;
+
+  _checkLimbs(qLimbs, numLimbs);
+  _checkLimbs(rLimbs, numLimbs); // Check range for result 'r'
+
+  // --- Changes Start Here ---
+
+  // Compute delta = xy - qp - r limb by limb
+  // Size should be 2n-1 to hold coefficients up to z^(2n-2)
+  let delta: Field[] = Array.from({ length: 2 * numLimbs - 1 }, () => Field(0));
+  let [X, Y, Q, R, P] = [xLimbs, yLimbs, qLimbs, rLimbs, pLimbs];
+
+  // Accumulate xy and subtract qp
+  for (let i = 0; i < numLimbs; i++) {
+    if (isSquare) {
+      delta[2 * i] = delta[2 * i].add(X[i].mul(X[i]));
+      for (let j = 0; j < i; j++) {
+        delta[i + j] = delta[i + j].add(X[i].mul(X[j]).mul(2n));
+      }
+    } else {
+      for (let j = 0; j < numLimbs; j++) {
+        // Ensure index i+j does not exceed delta bounds
+        if (i + j < delta.length) {
+          delta[i + j] = delta[i + j].add(X[i].mul(Y[j]));
+        } else if (X[i].mul(Y[j]).toBigInt() !== 0n) {
+          // This should ideally not happen if q/r fit numLimbs
+          console.warn(
+            `WARN: Product term X[${i}]*Y[${j}] overflows delta array.`,
+          );
+        }
+      }
+    }
+    for (let j = 0; j < numLimbs; j++) {
+      // Ensure index i+j does not exceed delta bounds
+      if (i + j < delta.length) {
+        delta[i + j] = delta[i + j].sub(Q[i].mul(P[j]));
+      } else if (Q[i].mul(P[j]).toBigInt() !== 0n) {
+        // This should ideally not happen if q/r fit numLimbs
+        console.warn(
+          `WARN: Quotient term Q[${i}]*P[${j}] overflows delta array.`,
         );
       }
-      super(value);
     }
+  }
 
-    // --- Static Factory Methods ---
+  // Subtract r and seal limbs (mimic old strategy)
+  for (let i = 0; i < numLimbs; i++) {
+    delta[i] = delta[i].sub(R[i]).seal(); // Seal after subtraction
+  }
+  // Seal remaining delta elements
+  for (let i = numLimbs; i < 2 * numLimbs - 1; i++) {
+    delta[i] = delta[i].seal(); // Seal the rest
+  }
+
+  // Perform carrying on the difference delta
+  let carry = Field(0);
+  const limbSizeMultiplierBigint = 1n << limbBitSize; // Keep bigint version for assert check
+  const limbSizeMultiplierField = Field(limbSizeMultiplierBigint); // Create Field version for div
+
+  // Loop up to 2n-3 (indices 0 to 2n-3)
+  for (let i = 0; i < 2 * numLimbs - 2; i++) {
+    // Seal the sum, as per the old working code
+    let limbPlusCarry = delta[i].add(carry).seal();
+
+    // Witness the next carry using FIELD division, like the old code
+    let nextCarry = Provable.witness(
+      Field,
+      () => limbPlusCarry.div(limbSizeMultiplierField), // Use Field.div()
+    );
+
+    // Range check the resulting carry field element, like the old code
+    rangeCheck128Signed(nextCarry);
+
+    // Constraint: delta_i + c_{i-1} = c_i * 2^limbBitSize (verified in the field)
+    // Use the bigint multiplier here, assertEquals handles Field(bigint) conversion
+    limbPlusCarry.assertEquals(
+      nextCarry.mul(limbSizeMultiplierBigint),
+      `_multiplyLimbs: Carry propagation check failed at limb index ${i}`,
+    );
+
+    // Update carry for the next iteration
+    carry = nextCarry;
+  }
+
+  // Final check: The last limb delta_{2n-2} plus the last carry c_{2n-3} must be zero.
+  delta[2 * numLimbs - 2]
+    .add(carry)
+    .assertEquals(0n, "_multiplyLimbs: Final carry check failed");
+
+  // --- Changes End Here ---
+
+  return rLimbs; // Return only the remainder limbs
+}
+
+export function createProvableBigint(bitSize: number) {
+  assert(
+    bitSize > 0,
+    `createProvableBigint: bitSize must be positive, got ${bitSize}`,
+  );
+  const numLimbs = Math.ceil(bitSize / Number(LIMB_BIT_SIZE));
+  // const actualBitSize = Number(BigInt(numLimbs) * LIMB_BIT_SIZE);
+
+  const LimbsProvableType = Provable.Array(Field, numLimbs);
+
+  class ProvableBigint_N extends Struct({ fields: LimbsProvableType }) {
+    static _NUM_LIMBS = numLimbs;
+    static _BIT_SIZE = bitSize;
+    static _LIMBS_TYPE = LimbsProvableType;
+
     static fromBigint(x: bigint): ProvableBigint_N {
-      assert(x >= 0n, `Input bigint ${x} must be non-negative`);
-      assert(
-        x < 1n << BigInt(bitSize),
-        `Input bigint ${x} is too large for ${bitSize} bits`,
-      );
-
-      let fields: Field[] = [];
-      let currentBigint = x;
-      for (let i = 0; i < numLimbs; i++) {
-        const limb = currentBigint & LIMB_MAX_VALUE;
-        fields.push(Field(limb));
-        currentBigint >>= LIMB_BIT_SIZE;
-      }
-      assert(
-        currentBigint === 0n || (currentBigint === -1n && x < 0n),
-        `Input bigint ${x} is too large for ${bitSize} bits`,
-      );
-      // Pad with zeros if fewer limbs were generated (e.g., small bigint)
-      while (fields.length < numLimbs) {
-        fields.push(Field(0));
-      }
-
-      return new ProvableBigint_N({ fields });
+      const limbs = _bigintToLimbs(x, this._NUM_LIMBS, bitSize);
+      return new ProvableBigint_N({ fields: limbs });
     }
 
-    static fromLimbs(limbs: Field[]): ProvableBigint_N {
-      if (limbs.length !== numLimbs) {
-        throw new Error(
-          `Expected ${numLimbs} limbs for ${bitSize}-bit ProvableBigint, got ${limbs.length}`,
-        );
-      }
-      return new ProvableBigint_N({ fields: [...limbs] }); // Copy limbs
+    static toBigint(instance: ProvableBigint_N): bigint {
+      return _limbsToBigint(instance.fields);
+    }
+
+    static assertEquals(
+      a: ProvableBigint_N,
+      b: ProvableBigint_N,
+      message?: string,
+    ): void {
+      _assertEqualsLimbs(a.fields, b.fields, message);
+    }
+
+    static assertNotEquals(
+      a: ProvableBigint_N,
+      b: ProvableBigint_N,
+      message?: string,
+    ): void {
+      _assertNotEqualsLimbs(a.fields, b.fields, message);
+    }
+
+    static modMul(
+      x: ProvableBigint_N,
+      y: ProvableBigint_N,
+      p: ProvableBigint_N,
+    ): ProvableBigint_N {
+      const rLimbs = _multiplyLimbs(
+        x.fields,
+        y.fields,
+        p.fields,
+        this._NUM_LIMBS,
+        this._BIT_SIZE,
+        this._LIMBS_TYPE,
+        { isSquare: false },
+      );
+      return new ProvableBigint_N({ fields: rLimbs });
     }
 
     static modSquare(
       x: ProvableBigint_N,
       p: ProvableBigint_N,
     ): ProvableBigint_N {
-      return multiply<ProvableBigint_N>(
-        this as unknown as ProvableBigintStatic<ProvableBigint_N>,
-        x,
-        x,
-        p,
+      const rLimbs = _multiplyLimbs(
+        x.fields,
+        x.fields,
+        p.fields,
+        this._NUM_LIMBS,
+        this._BIT_SIZE,
+        this._LIMBS_TYPE,
         { isSquare: true },
       );
+      return new ProvableBigint_N({ fields: rLimbs });
     }
 
-    // --- Provable Static Methods (Delegation) ---
-    static sizeInFields(): number {
-      return ProvableBigintStruct.sizeInFields();
+    checkLimbs(): void {
+      _checkLimbs(this.fields, ProvableBigint_N._NUM_LIMBS);
     }
-    static toFields(instance: ProvableBigint_N): Field[] {
-      return ProvableBigintStruct.toFields({ fields: instance.fields });
+
+    toBigint(): bigint {
+      return _limbsToBigint(this.fields);
     }
-    static toAuxiliary(instance?: ProvableBigint_N | undefined): any[] {
-      return ProvableBigintStruct.toAuxiliary(
-        instance ? { fields: instance.fields } : undefined,
+
+    assertEquals(other: ProvableBigint_N, message?: string): void {
+      _assertEqualsLimbs(this.fields, other.fields, message);
+    }
+
+    assertNotEquals(other: ProvableBigint_N, message?: string): void {
+      _assertNotEqualsLimbs(this.fields, other.fields, message);
+    }
+
+    modMul(y: ProvableBigint_N, p: ProvableBigint_N): ProvableBigint_N {
+      return ProvableBigint_N.modMul(this, y, p);
+    }
+
+    /// Does not check fields.
+    static fromFields(limbs: Field[]): ProvableBigint_N {
+      assert(
+        limbs.length === this._NUM_LIMBS,
+        `fromFields: Expected ${this._NUM_LIMBS} limbs, got ${limbs.length}`,
       );
-    }
-    static fromFields(fields: Field[]): ProvableBigint_N {
-      const rawValue = ProvableBigintStruct.fromFields(fields);
-      return new ProvableBigint_N(rawValue);
-    }
-    static check(instance: ProvableBigint_N): void {
-      ProvableBigintStruct.check({ fields: instance.fields });
-      instance.checkLimbs(); // Add limb range checks
-    }
-    static toBigint(instance: ProvableBigint_N): bigint {
-      return instance.toBigint();
-    }
-    static empty(): ProvableBigint_N {
-      return new ProvableBigint_N(ProvableBigintStruct.empty());
+      return new ProvableBigint_N({ fields: limbs });
     }
   }
 
-  return ProvableBigint_N as unknown as ProvableBigintStatic<ProvableBigintBase>;
+  return ProvableBigint_N;
 }
 
-// --- Generic Multiplication Logic ---
-export function multiply<T extends ProvableBigintBase>(
-  StaticType: ProvableBigintStatic<T>,
-  x: T,
-  y: T,
-  p: T,
-  { isSquare = false } = {},
-): T {
-  const numLimbs = StaticType.numLimbs;
-  const limbBitSize = LIMB_BIT_SIZE;
-  const limbSizeMultiplier = 1n << limbBitSize;
-
-  const WitnessStruct = Struct({
-    qLimbs: StaticType.LimbsProvableType, // Use Provable.Array(Field, numLimbs)
-    rLimbs: StaticType.LimbsProvableType, // Use Provable.Array(Field, numLimbs)
-  });
-
-  // Witness q, r such that x*y = q*p + r
-  let witnessedLimbs = Provable.witness(WitnessStruct, () => {
-    let xVal = x.toBigint();
-    let yVal = isSquare ? xVal : y.toBigint(); // Use xVal if squaring
-    let pVal = p.toBigint();
-    if (pVal === 0n) {
-      throw new Error("Modulus (p) cannot be zero in multiply witness");
-    }
-    let xy = xVal * yVal;
-    let qVal = xy / pVal;
-    let rVal = xy % pVal; // xy - qVal * pVal; Use modulo
-    if (rVal < 0n) rVal += pVal; // Ensure remainder is positive
-
-    // Need to ensure witness values fit within the limb structure
-    // Example check (might need adjustment based on exact max values)
-    const maxVal = (1n << BigInt(StaticType.bitSize)) - 1n;
-    if (qVal > maxVal || rVal > maxVal || qVal < 0n || rVal < 0n) {
-      console.warn(
-        `Witness values might exceed ${StaticType.bitSize} bits. q=${qVal}, r=${rVal}`,
-      );
-      // Depending on the exact constraints, you might need to handle overflows
-      // or ensure inputs guarantee valid witness values.
-      // For now, we proceed, but this is a potential issue area.
-      // Clamping or throwing an error might be necessary in production.
-      // qVal = qVal & maxVal; // Example clamping (potentially incorrect math!)
-      // rVal = rVal & maxVal;
-    }
-
-    return new WitnessStruct({
-      qLimbs: StaticType.fromBigint(qVal).toFields(),
-      rLimbs: StaticType.fromBigint(rVal).toFields(),
-    });
-  });
-
-  const q = StaticType.fromLimbs(witnessedLimbs.qLimbs);
-  const r = StaticType.fromLimbs(witnessedLimbs.rLimbs);
-  q.checkLimbs();
-  r.checkLimbs();
-
-  // Compute delta = xy - qp - r limb by limb
-  let delta: Field[] = Array.from({ length: 2 * numLimbs - 1 }, () => Field(0));
-  let [X, Y, Q, R, P] = [x.fields, y.fields, q.fields, r.fields, p.fields];
-
-  // Accumulate xy and subtract qp
-  for (let i = 0; i < numLimbs; i++) {
-    // Compute contribution from x*y
-    if (isSquare) {
-      // Optimization for squaring: compute diagonal element x_i * x_i
-      delta[2 * i] = delta[2 * i].add(X[i].mul(X[i]));
-      // Compute off-diagonal elements 2 * x_i * x_j for j < i
-      for (let j = 0; j < i; j++) {
-        delta[i + j] = delta[i + j].add(X[i].mul(X[j]).mul(2n));
-      }
-    } else {
-      // General multiplication: compute x_i * y_j for all j
-      for (let j = 0; j < numLimbs; j++) {
-        delta[i + j] = delta[i + j].add(X[i].mul(Y[j]));
-      }
-    }
-
-    // Subtract contribution from q*p
-    for (let j = 0; j < numLimbs; j++) {
-      delta[i + j] = delta[i + j].sub(Q[i].mul(P[j]));
-    }
-  }
-
-  // Subtract r and seal initial limbs (mimicking rsa4096 structure)
-  // R has only numLimbs elements.
-  for (let i = 0; i < numLimbs; i++) {
-    delta[i] = delta[i].sub(R[i]).seal();
-  }
-  // Seal the remaining delta elements that didn't have R subtracted
-  for (let i = numLimbs; i < 2 * numLimbs - 1; i++) {
-    delta[i] = delta[i].seal();
-  }
-
-  // Perform carrying on the difference delta to show that it is zero
-  let carry = Field(0);
-
-  for (let i = 0; i < 2 * numLimbs - 2; i++) {
-    // Iterate up to the second-to-last limb
-    let deltaPlusCarry = delta[i].add(carry).seal(); // Seal needed? Mimicking original.
-
-    // Witness the next carry c_i = floor( (delta_i + c_{i-1}) / 2^limbBitSize )
-    carry = Provable.witness(Field, () =>
-      deltaPlusCarry.div(limbSizeMultiplier),
-    );
-
-    // Range check the carry: -2^127 <= carry < 2^127
-    rangeCheck128Signed(carry); // Use the function from core_2.ts
-
-    // Constraint: delta_i + c_{i-1} = c_i * 2^limbBitSize
-    // This proves that the lowest limbBitSize bits of (delta_i + c_{i-1}) are zero.
-    deltaPlusCarry.assertEquals(carry.mul(limbSizeMultiplier));
-  }
-
-  // Final check: The last limb delta_{2n-2} plus the last carry c_{2n-3} must be zero.
-  delta[2 * numLimbs - 2].add(carry).assertEquals(0n);
-
-  // If all checks pass, then xy - qp - r = 0 holds as integers,
-  // and r is the correct modular result xy mod p.
-  // The witness generation already checked r's limbs via StaticType.check.
-  return r;
-}
-
-// --- RSA Verification Example (Modified to use isSquare correctly) ---
-export function rsaVerify<T extends ProvableBigintBase>(
-  StaticType: ProvableBigintStatic<T>,
-  message: T,
-  signature: T,
-  modulus: T,
-  publicExponent: Field, // Assume standard small exponent fitting in a Field
+export function rsaExponentiation(
+  BigintType: ReturnType<typeof createProvableBigint>,
+  signature: InstanceType<typeof BigintType>,
+  modulus: InstanceType<typeof BigintType>,
+  publicExponent: Field,
   expBitCount: number = EXP_BIT_COUNT,
-): void {
-  const one = StaticType.fromBigint(1n);
-
+): InstanceType<typeof BigintType> {
+  const one = BigintType.fromBigint(1n);
   const bits = publicExponent.toBits(expBitCount);
   let result = one;
 
-  // Square-and-multiply exponentiation
   for (let i = expBitCount - 1; i >= 0; i--) {
-    // Square: result = result^2 mod modulus
-    result = multiply<T>(StaticType, result, result, modulus, {
-      isSquare: true,
-    }); // Use isSquare = true
-
-    // Multiply: if bit is 1, result = result * signature mod modulus
-    let multiplied = multiply<T>(StaticType, result, signature, modulus); // isSquare defaults to false
-    result = Provable.if(bits[i], StaticType, multiplied, result);
+    result = BigintType.modSquare(result, modulus);
+    let multiplied = BigintType.modMul(result, signature, modulus);
+    // Cast the result of Provable.if to the specific Struct type
+    result = Provable.if(
+      bits[i],
+      BigintType,
+      multiplied,
+      result,
+    ) as InstanceType<typeof BigintType>;
   }
-
-  result.assertEquals(message, "RSA signature verification failed");
+  return result;
 }

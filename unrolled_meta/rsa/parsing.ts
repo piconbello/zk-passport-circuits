@@ -1,6 +1,5 @@
 import type { DynamicBytes } from "@egemengol/mina-credentials/dynamic";
-import { Gadgets, Field, Provable, UInt8 } from "o1js";
-import { RsaLimbs4096 } from "./rsa4096";
+import { Gadgets, Field, Provable, UInt8, assert } from "o1js";
 import type {
   ProvableBigintBase,
   ProvableBigintStatic,
@@ -95,10 +94,10 @@ export function parseModulusIntoLimbs<T extends ProvableBigintBase>(
   offset: Field,
   modulusLengthBytes: number, // Use number type here based on the explanation above
 ): T {
-  const expectedBytes = StaticType.bitSize / 8;
+  const expectedBytes = StaticType._bitSize / 8;
   if (modulusLengthBytes !== expectedBytes) {
     throw new Error(
-      `Modulus length mismatch: Expected ${expectedBytes} bytes for ${StaticType.bitSize}-bit type, but received ${modulusLengthBytes} bytes.`,
+      `Modulus length mismatch: Expected ${expectedBytes} bytes for ${StaticType._bitSize}-bit type, but received ${modulusLengthBytes} bytes.`,
     );
   }
   // --- Limb Construction ---
@@ -131,146 +130,6 @@ export function parseModulusIntoLimbs<T extends ProvableBigintBase>(
 
   return result;
 }
-
-/**
- * Converts a big-endian encoded RSA modulus into an array of 36 limbs of 116 bits each
- * to support efficient circuit computations. This representation is needed because
- * o1js (and ZK systems generally) can't directly handle the full 4096-bit RSA modulus.
- *
- * @param enc - The RSA modulus as a ModulusBytes object (big-endian encoded)
- * @returns An array of 36 Field elements, each representing a 116-bit limb
- */
-// export function parseModulusIntoLimbs(enc: DynamicBytes, offset: Field) {
-//   // We expect a 4096-bit modulus (512 bytes)
-//   assertLessThan16(offset.add(512), enc.length);
-
-//   // Initialize all limbs to zero - we'll build them incrementally
-//   const limbFields = [];
-//   for (let i = 0; i < 36; i++) {
-//     limbFields.push(Field(0));
-//   }
-//   const limbs = RsaLimbs4096.fromFields(limbFields);
-
-//   // We process byte-by-byte in reverse order because:
-//   // 1. The modulus is stored big-endian (most significant byte first)
-//   // 2. We're building limbs in little-endian format (least significant bits in limb 0)
-//   for (let byteIndex = 0; byteIndex < 512; byteIndex++) {
-//     const byte = enc.getOrUnconstrained(offset.add(byteIndex)).value;
-
-//     // Convert from big-endian byte position to absolute bit position
-//     const reversedByteIndex = 511 - byteIndex;
-//     const bitPos = reversedByteIndex * 8;
-
-//     addByteToLimbs(limbs, byte, bitPos);
-//   }
-
-//   return limbs;
-// }
-
-/**
- * Parses a big-endian encoded RSA modulus from DynamicBytes into a ProvableBigint.
- * Reads `modulusLengthBytes` bytes starting at `offset` from `enc`.
- * Constructs a ProvableBigint suitable for `targetBitSize`.
- *
- * @param enc - The buffer containing the encoded modulus bytes.
- * @param offset - The starting offset of the modulus value bytes in `enc`.
- * @param modulusLengthBytes - The length of the modulus in bytes (as a Field).
- * @param targetBitSize - The expected bit size of the modulus (e.g., 2048 or 4096).
- *                        This determines the number of limbs in the output ProvableBigint.
- * @returns An instance of a ProvableBigintBase subclass representing the modulus.
- */
-// export function parseModulusIntoProvableBigint(
-//   enc: DynamicBytes,
-//   offset: Field,
-//   modulusLengthBytes: Field,
-//   targetBitSize: number,
-// ): ProvableBigintStatic {
-//   // Return the base class type
-
-//   // 1. Get the specific ProvableBigint static type (constructor + static props)
-//   const ProvableBigintType = createProvableBigint(targetBitSize);
-//   const numLimbs = ProvableBigintType.numLimbs;
-
-//   // 2. Witness the modulus length as a JS number for loop control
-//   //    and perform out-of-circuit checks during witness generation.
-//   const lenNum = Provable.witness(Provable.UInt64, () => {
-//     // Use UInt64 for positive length
-//     const len = modulusLengthBytes.toBigInt();
-//     const off = offset.toBigInt();
-//     const encLen = enc.length.toBigInt(); // Assuming enc.length is a Field
-
-//     // Check: Does the read stay within the buffer bounds?
-//     if (off < 0n || len <= 0n) {
-//       throw new Error(`Invalid offset (${off}) or length (${len})`);
-//     }
-//     if (off + len > encLen) {
-//       throw new Error(
-//         `Modulus read range [${off}, ${off + len}) exceeds buffer length ${encLen}`,
-//       );
-//     }
-
-//     // Check: Is the byte length consistent with the target bit size?
-//     // Allow for a potential leading zero byte in DER encoding.
-//     const expectedBytesMin = BigInt(targetBitSize / 8);
-//     const expectedBytesMax = BigInt(targetBitSize / 8 + 1);
-//     if (len < expectedBytesMin || len > expectedBytesMax) {
-//       // This might indicate an issue (e.g., wrong key size detected, padding error)
-//       // Depending on strictness, could throw or just warn.
-//       console.warn(
-//         `WARN: Modulus length ${len} bytes is unusual for target ${targetBitSize} bits.`,
-//       );
-//       // Example: throw new Error(`Modulus length ${len} bytes inconsistent with target ${targetBitSize} bits`);
-//     }
-//     // Check if length exceeds what fits in the limbs
-//     if (len * 8n > BigInt(numLimbs * 116)) {
-//       // 116 is LIMB_BIT_SIZE
-//       throw new Error(
-//         `Modulus length ${len} bytes (${len * 8n} bits) exceeds capacity of ${numLimbs} limbs (${numLimbs * 116} bits)`,
-//       );
-//     }
-
-//     return Provable.UInt64.from(len); // Return as Provable type for witness
-//   });
-
-//   // Convert witnessed length back to a JS number for loop control
-//   const len = Number(lenNum.toBigInt());
-
-//   // 3. Initialize limbs array with zeros
-//   let limbs: Field[] = Array(numLimbs).fill(Field(0));
-
-//   // 4. Process bytes from `enc` (big-endian) and add them to `limbs` (little-endian)
-//   // This loop runs during witness generation primarily, setting up constraints via addByteToLimbs
-//   for (let byteIndex = 0; byteIndex < len; byteIndex++) {
-//     // Calculate offset for the current byte within the circuit
-//     const currentOffset = offset.add(Field(byteIndex));
-//     // Get the byte value (or an unconstrained default if out of bounds - though witness check should prevent this)
-//     const byteValue = enc.getOrUnconstrained(currentOffset).value;
-
-//     // Calculate the bit position for this byte in the little-endian limb structure
-//     // This uses the JS 'len' derived from the witness
-//     const reversedByteIndex = len - 1 - byteIndex;
-//     const bitPos = reversedByteIndex * 8;
-
-//     // Add the byte to the appropriate limb(s). This function modifies 'limbs' in place
-//     // and contains the necessary Provable logic (like splitting bytes across limbs).
-//     addByteToLimbs(limbs, byteValue, bitPos);
-//   }
-
-//   // 5. Create the ProvableBigint instance from the populated limbs
-//   // 'fromLimbs' expects an array of the exact 'numLimbs' length.
-//   const modulusBigint = ProvableBigintType.fromLimbs(limbs);
-
-//   // 6. Perform necessary checks on the created instance (optional but recommended)
-//   // The static 'check' method usually includes checks on individual limb ranges.
-//   ProvableBigintType.check(modulusBigint);
-
-//   // Note: This does not explicitly check if the resulting BigInt value is < 2^targetBitSize.
-//   // It relies on the input `modulusLengthBytes` and `addByteToLimbs` logic being correct.
-//   // If a strict check is needed, additional logic comparing the limbs to the max value
-//   // for `targetBitSize` would be required.
-
-//   return modulusBigint;
-// }
 
 /**
  * Parses an RSA exponent from DER encoding.
@@ -317,4 +176,123 @@ export function parseExponent(enc: DynamicBytes, offset: Field) {
   );
 
   return exponentValue;
+}
+
+/**
+ * Parses an RSA public key from PKCS#1 DER encoding (SEQUENCE { modulus INTEGER, exponent INTEGER }).
+ * This function is generic and requires the specific ProvableBigint static type
+ * corresponding to the expected key size to be passed in.
+ * Assumes standard "long long short" length encodings common for RSA keys.
+ *
+ * @template T - The specific ProvableBigint type (e.g., ProvableBigint2048).
+ * @param StaticType - The static class (`ProvableBigintStatic`) for the target bigint size.
+ * @param enc - The byte array containing the DER-encoded key.
+ * @param startOffset - The starting Field position of the key within `enc`.
+ * @returns An object containing the parsed modulus (as type T) and exponent (as Field).
+ */
+export function parseRSAPubkey<T extends ProvableBigintBase>(
+  StaticType: ProvableBigintStatic<T>,
+  enc: DynamicBytes,
+  startOffset: Field,
+): { modulus: T; exponentValue: Field } {
+  // HEADER PARSING
+  let cursor: Field = startOffset;
+
+  // SEQUENCE tag
+  enc
+    .getOrUnconstrained(cursor)
+    .assertEquals(UInt8.from(48), "Expected SEQUENCE tag (0x30)");
+  cursor = cursor.add(1);
+
+  // --- SEQUENCE Length (assuming long form for typical keys) ---
+  // Check for long-form length indicator (0x82 means length is in next 2 bytes)
+  // Note: Smaller keys *might* use short form or 0x81, this assumes typical > 255 byte total structure
+  enc
+    .getOrUnconstrained(cursor)
+    .assertEquals(
+      UInt8.from(130),
+      "Expected long-form length indicator (0x82) for SEQUENCE",
+    );
+  cursor = cursor.add(1);
+  // We don't strictly need the sequence length value itself, just skip the length bytes
+  cursor = cursor.add(2); // Skip the 2 bytes specifying the sequence length
+
+  // --- Modulus INTEGER ---
+  // INTEGER tag for modulus
+  enc
+    .getOrUnconstrained(cursor)
+    .assertEquals(UInt8.from(2), "Expected INTEGER tag (0x02) for modulus");
+  cursor = cursor.add(1);
+
+  // Modulus Length (assuming long form for typical keys)
+  enc
+    .getOrUnconstrained(cursor)
+    .assertEquals(
+      UInt8.from(130),
+      "Expected long-form length indicator (0x82) for modulus length",
+    );
+  cursor = cursor.add(1);
+
+  // Read modulus length bytes (2 bytes)
+  const modulusLengthHigh = enc.getOrUnconstrained(cursor).value;
+  cursor = cursor.add(1);
+  const modulusLengthLow = enc.getOrUnconstrained(cursor).value;
+  cursor = cursor.add(1);
+
+  // Calculate modulus length as a Field
+  let modulusLengthField = modulusLengthHigh.mul(256).add(modulusLengthLow);
+
+  // Handle potential leading zero byte for positive integers
+  // Read the first byte of the modulus value
+  const modulusHead = enc.getOrUnconstrained(cursor);
+  const hasLeadingZero = modulusHead.value.equals(Field(0));
+
+  // Adjust cursor and length field if leading zero exists
+  cursor = cursor.add(hasLeadingZero.toField()); // Advance cursor by 1 if leading zero
+  modulusLengthField = modulusLengthField.sub(hasLeadingZero.toField()); // Decrease length by 1 if leading zero
+
+  // --- ASSERTION: Check consistency with StaticType ---
+  // Calculate the expected number of bytes based on the ProvableBigint type provided
+  const expectedModulusBytes = StaticType._bitSize / 8;
+  assert(
+    Number.isInteger(expectedModulusBytes),
+    `StaticType.bitSize (${StaticType._bitSize}) must be a multiple of 8`,
+  );
+
+  // Assert that the length read from DER matches the expected length for this key size
+  modulusLengthField.assertEquals(
+    Field(expectedModulusBytes),
+    `Modulus length in DER does not match expected ${expectedModulusBytes} bytes for ${StaticType._bitSize}-bit key`,
+  );
+
+  // --- Parse Modulus Limbs ---
+  // Call the generic parsing function, passing the StaticType and the *expected* (and asserted) length as a number
+  const modulus: T = parseModulusIntoLimbs<T>(
+    StaticType,
+    enc,
+    cursor,
+    expectedModulusBytes, // Pass the JS number expected length
+  );
+
+  // Advance cursor past the modulus bytes
+  cursor = cursor.add(expectedModulusBytes);
+
+  // --- EXPONENT PARSING ---
+  // INTEGER tag for exponent
+  enc
+    .getOrUnconstrained(cursor)
+    .assertEquals(UInt8.from(2), "Expected INTEGER tag (0x02) for exponent");
+  cursor = cursor.add(1);
+
+  // Parse the exponent value (handles short-form length internally)
+  const exponentValue = parseExponent(enc, cursor);
+
+  // Note: We don't need to advance the cursor further based on exponent length here,
+  // as parseExponent reads the length byte and we only return the value.
+  // If subsequent fields were parsed, we'd need to calculate the exponent field length.
+
+  return {
+    modulus, // Parsed modulus as type T
+    exponentValue, // Parsed exponent as Field
+  };
 }

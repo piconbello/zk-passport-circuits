@@ -1,4 +1,4 @@
-import { UInt8, Field, Poseidon, Provable } from "o1js";
+import { UInt8, Field, Poseidon, Provable, ProvableType } from "o1js";
 import type { Bytes65 } from "./constants";
 import type { DynamicBytes } from "@egemengol/mina-credentials";
 
@@ -74,12 +74,15 @@ export function bytesToLimbBE(bytes_: UInt8[]) {
   return limb.seal();
 }
 
+ProvableType;
+
 export function hashBytewisePoseidon(db: DynamicBytes): Field {
   let state = Poseidon.initialState();
   db.forEach((u8, isDummy, _i) => {
+    // @ts-ignore
     state = Provable.if(
       isDummy,
-      // @ts-ignore
+      Provable.Array(Field, 3),
       state,
       Poseidon.update(state, [u8.value]),
     );

@@ -92,4 +92,4 @@ async function analyze() {
   console.log(mapObject(analysis, (m) => m.summary()["Total rows"]));
 }
 
-await analyze();
+// await analyze();

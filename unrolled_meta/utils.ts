@@ -17,3 +17,13 @@ export function once<T>(fn: () => Promise<T>): () => Promise<T> {
     return promise;
   };
 }
+
+export function serializedLengthOf(bn: bigint): number {
+  let dec = BigInt(bn);
+  let len = 0;
+  while (dec !== 0n) {
+    len += 1;
+    dec = dec >> 8n;
+  }
+  return len;
+}

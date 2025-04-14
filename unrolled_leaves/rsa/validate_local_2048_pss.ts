@@ -1,23 +1,26 @@
-import { Bytes, Field, ZkProgram, Poseidon, Struct } from "o1js";
-import type { ZkProgramMethods } from "../../unrolled_meta/interface";
+import { Bytes, Field, Poseidon } from "o1js";
+import type {
+  PerProgram,
+  ZkProgramMethods,
+} from "../../unrolled_meta/interface";
 import { Exp2048_Output } from "./exponentiation_2048";
 import { pssVerify } from "../../unrolled_meta/rsa/padding_pss";
 import {
   encodeRsaPubkeyFromParts,
   parseFromBE,
 } from "../../unrolled_meta/rsa/parsingStatic";
-import type { Length } from "../../unrolled_meta/rsa/constants";
-import { Out } from "../../unrolled_meta/out";
-import { mapObject } from "../../tests/common";
 import { ProvableBigint2048, RsaMessage2048 } from "./constants";
+import { serializedLengthOf } from "../../unrolled_meta/utils";
+import { rsaExponentiationFast } from "../../unrolled_meta/rsa/provableBigint";
+import { sha256 } from "@noble/hashes/sha256";
 
 const KEY_SIZE_BITS = 2048n;
 
 export function getRsaValidationLocal2048Pss(
   isModulusPrefixedWithZero: boolean,
   exponentByteLength: number,
-  messageDigestAlgoSizeBytes: Length,
-  saltSizeBytes: Length,
+  messageDigestAlgoSizeBytes: number,
+  saltSizeBytes: number,
 ): ZkProgramMethods {
   class DigestBytes extends Bytes(messageDigestAlgoSizeBytes) {}
   return {
@@ -27,19 +30,13 @@ export function getRsaValidationLocal2048Pss(
         DigestBytes,
         RsaMessage2048,
         RsaMessage2048,
-        Field,
       ],
       async method(
         expOut: Exp2048_Output,
         messageShaDigest: DigestBytes,
         encodedMessage: RsaMessage2048,
         encodedModulus: RsaMessage2048,
-        exponent: Field,
       ) {
-        expOut.carry.assertEquals(
-          Poseidon.hash(messageShaDigest.bytes.map((b) => b.value)),
-          "message sha digest poseidon digest",
-        );
         const encodedMessageBigint = parseFromBE(
           ProvableBigint2048,
           encodedMessage.bytes,
@@ -57,13 +54,12 @@ export function getRsaValidationLocal2048Pss(
 
         const modulus = parseFromBE(ProvableBigint2048, encodedModulus.bytes);
         modulus.assertEquals(expOut.modulus);
-        exponent.assertEquals(expOut.exponent);
         const encodedPubkey = encodeRsaPubkeyFromParts(
           Number(KEY_SIZE_BITS),
           isModulusPrefixedWithZero,
           exponentByteLength,
           encodedModulus.bytes,
-          exponent,
+          expOut.exponent,
         );
 
         return {
@@ -81,15 +77,51 @@ export function getRsaValidationLocal2048Pss(
 const methods = getRsaValidationLocal2048Pss(true, 3, 32, 32);
 // console.log(methods);
 
-const ValidateLocal = ZkProgram({
-  name: "validate-local",
-  publicOutput: Out,
-  methods: methods,
-});
-
-async function analyze() {
-  const analysis = await ValidateLocal.analyzeMethods();
-  console.log(mapObject(analysis, (m) => m.summary()["Total rows"]));
+export function generateCall(
+  isModulusPrefixedWithZero: boolean,
+  digestSizeBytes: number,
+  saltSizeBytes: number,
+  modulus: bigint,
+  signature: Uint8Array,
+  exponent: bigint,
+  signedAttrs: Uint8Array,
+): PerProgram {
+  const signHex = Buffer.from(signature).toString("hex");
+  const signBn = signHex ? BigInt("0x" + signHex) : 0n;
+  const expResult = rsaExponentiationFast(signBn, modulus, exponent);
+  let emHex = expResult.toString(16);
+  // Add a leading zero if the length is odd to ensure proper byte alignment
+  if (emHex.length % 2 !== 0) {
+    emHex = "0" + emHex;
+  }
+  const encodedMessage = Bytes.from(Buffer.from(emHex, "hex"));
+  let modulusHex = modulus.toString(16);
+  if (modulusHex.length % 2 !== 0) {
+    modulusHex = "0" + modulusHex;
+  }
+  const encodedModulus = Bytes.from(Buffer.from(modulusHex, "hex"));
+  return {
+    methods: getRsaValidationLocal2048Pss(
+      isModulusPrefixedWithZero,
+      serializedLengthOf(exponent),
+      digestSizeBytes,
+      saltSizeBytes,
+    ),
+    calls: [
+      {
+        methodName: "validatePss",
+        args: [
+          new Exp2048_Output({
+            modulus: ProvableBigint2048.fromBigint(modulus),
+            signature: ProvableBigint2048.fromBytes(signature),
+            exponent: Field(exponent),
+            result: ProvableBigint2048.fromBigint(expResult),
+          }),
+          Bytes.from(sha256(signedAttrs)),
+          encodedMessage,
+          encodedModulus,
+        ],
+      },
+    ],
+  };
 }
-
-// await analyze();

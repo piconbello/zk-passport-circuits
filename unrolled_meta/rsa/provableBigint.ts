@@ -275,8 +275,46 @@ export function createProvableBigint(bitSize: number) {
       return new ProvableBigint_N({ fields: limbs });
     }
 
+    static fromBytes(arr: Uint8Array): ProvableBigint_N {
+      assert(arr != null, "fromBytes: byte array must not be null");
+      assert(
+        arr instanceof Uint8Array,
+        "fromBytes: input must be a Uint8Array",
+      );
+
+      // Calculate max bytes needed for this bit size
+      const maxByteLength = Math.ceil(this._BIT_SIZE / 8);
+      assert(
+        arr.length <= maxByteLength,
+        `fromBytes: byte array length (${arr.length}) exceeds maximum size (${maxByteLength}) for ${this._BIT_SIZE} bits`,
+      );
+
+      const hex = Buffer.from(arr).toString("hex");
+      const bn = hex ? BigInt("0x" + hex) : 0n;
+
+      // Make sure the resulting bigint fits in the bit size
+      const maxValue = (1n << BigInt(this._BIT_SIZE)) - 1n;
+      assert(
+        bn <= maxValue,
+        `fromBytes: value ${bn} exceeds maximum value ${maxValue} for ${this._BIT_SIZE} bits`,
+      );
+
+      return this.fromBigint(bn);
+    }
+
     static toBigint(instance: ProvableBigint_N): bigint {
       return _limbsToBigint(instance.fields);
+    }
+
+    static toBytes(instance: ProvableBigint_N): Uint8Array {
+      const bn = instance.toBigint();
+      // Convert bigint to hex, ensuring it has an even number of characters by padding with a leading zero if needed
+      let hex = bn.toString(16);
+      // Add a leading zero if the length is odd to ensure proper byte alignment
+      if (hex.length % 2 !== 0) {
+        hex = "0" + hex;
+      }
+      return Uint8Array.from(Buffer.from(hex, "hex"));
     }
 
     static assertEquals(
@@ -382,6 +420,33 @@ export function rsaExponentiation(
       multiplied,
       result,
     ) as InstanceType<typeof BigintType>;
+  }
+  return result;
+}
+
+export function rsaExponentiationFast(
+  signature: bigint,
+  modulus: bigint,
+  publicExponent: bigint,
+): bigint {
+  if (signature <= 0n) {
+    throw new Error("Signature must be positive.");
+  }
+  if (publicExponent <= 0n) {
+    throw new Error("Public exponent must be positive.");
+  }
+  if (modulus <= 0n) {
+    throw new Error("Modulus must be positive.");
+  }
+  let result = 1n;
+
+  for (let i = EXP_BIT_COUNT - 1; i >= 0; i--) {
+    result = (result * result) % modulus;
+
+    const bit = (publicExponent >> BigInt(i)) & 1n;
+    if (bit === 1n) {
+      result = (result * signature) % modulus;
+    }
   }
   return result;
 }

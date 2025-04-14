@@ -1,11 +1,13 @@
-import { Field, Provable, Struct, ZkProgram, Poseidon } from "o1js";
+import { Field, Provable, Struct, ZkProgram, Poseidon, Bytes } from "o1js";
 import {
   createProvableBigint,
   EXP_BIT_COUNT,
 } from "../../unrolled_meta/rsa/provableBigint";
-import { mapObject } from "../../tests/common";
-import { Out } from "../../unrolled_meta/out";
-import type { ZkProgramMethods } from "../../unrolled_meta/interface";
+import type {
+  PerProgram,
+  ZkProgramMethods,
+} from "../../unrolled_meta/interface";
+import { sha256 } from "@noble/hashes/sha256";
 
 const ProvableBigint2048 = createProvableBigint(2048);
 const ONE = ProvableBigint2048.fromBigint(1n);
@@ -14,33 +16,22 @@ export class Exp2048_Input extends Struct({
   modulus: ProvableBigint2048,
   signature: ProvableBigint2048,
   exponent: Field,
-  carry: Field,
-}) {
-  hashPoseidon() {
-    return Poseidon.hash([
-      ...this.modulus.fields,
-      ...this.signature.fields,
-      this.exponent,
-      this.carry,
-    ]);
-  }
-}
+  signedAttrsDigestDigest: Field,
+}) {}
 
 export class Exp2048_Output extends Struct({
   result: ProvableBigint2048,
   modulus: ProvableBigint2048,
   signature: ProvableBigint2048,
   exponent: Field,
-  carry: Field,
 }) {
   hashPoseidon() {
-    const inpDigest = Poseidon.hash([
+    return Poseidon.hash([
+      ...this.result.fields,
       ...this.modulus.fields,
       ...this.signature.fields,
       this.exponent,
-      this.carry,
     ]);
-    return Poseidon.hash([inpDigest, ...this.result.fields]);
   }
 }
 
@@ -67,7 +58,7 @@ export const ExpExponentiation2048_Methods: ZkProgramMethods = {
       });
       return {
         publicOutput: {
-          left: inp.hashPoseidon(),
+          left: inp.signedAttrsDigestDigest,
           right: out.hashPoseidon(),
           vkDigest: Field(0),
         },
@@ -76,16 +67,28 @@ export const ExpExponentiation2048_Methods: ZkProgramMethods = {
   },
 };
 
-export const RsaVerificationSingle_2048 = ZkProgram({
-  name: "rsa-verify-2048-single",
-  publicOutput: Out,
-  methods: ExpExponentiation2048_Methods,
-});
-
-// --- Analysis (Optional) ---
-async function analyze() {
-  const analysis = await RsaVerificationSingle_2048.analyzeMethods();
-  console.log(mapObject(analysis, (m) => m.summary()["Total rows"]));
+export function generateCall(
+  modulus: bigint,
+  signature: Uint8Array,
+  exponent: bigint,
+  signedAttrs: Uint8Array,
+): PerProgram {
+  return {
+    methods: ExpExponentiation2048_Methods,
+    calls: [
+      {
+        methodName: "exponentiate",
+        args: [
+          new Exp2048_Input({
+            modulus: ProvableBigint2048.fromBigint(modulus),
+            signature: ProvableBigint2048.fromBytes(signature),
+            exponent: Field(exponent),
+            signedAttrsDigestDigest: Poseidon.hash(
+              Bytes.from(sha256(signedAttrs)).bytes.map((b) => b.value),
+            ),
+          }),
+        ],
+      },
+    ],
+  };
 }
-
-// analyze();

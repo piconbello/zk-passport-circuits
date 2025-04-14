@@ -114,13 +114,6 @@ const LDS_256_Verifier_Methods: ZkProgramMethods = {
       const ldsDigest: Bytes = DynamicSHA2.validate(256, state, lds);
       const ldsDigestFields = ldsDigest.bytes.map((u8) => u8.value);
 
-      Provable.asProver(() => {
-        console.log(
-          ">>> verifyLDS: Fields for Poseidon Hash (hex):",
-          ldsDigestFields.map((f) => f.toBigInt().toString(16)).join(""),
-        );
-      });
-
       return {
         publicOutput: new Out({
           left: Poseidon.hash([carry, state.hash()]),
@@ -184,5 +177,10 @@ export function generateCalls(
     ],
   };
 
-  return [stepper, lastStep, verify];
+  const pps = [];
+  if (stepper.calls.length !== 0) {
+    pps.push(stepper);
+  }
+
+  return pps.concat([lastStep, verify]);
 }

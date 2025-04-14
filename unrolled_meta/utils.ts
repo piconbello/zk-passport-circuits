@@ -1,3 +1,9 @@
+import { ZkProgram } from "o1js";
+import { mapObject } from "../tests/common";
+import type { ZkProgramMethods } from "./interface";
+import { randomUUIDv7 } from "bun";
+import { Out } from "./out";
+
 export function once<T>(fn: () => Promise<T>): () => Promise<T> {
   let result: T | undefined;
   let executed = false;
@@ -26,4 +32,16 @@ export function serializedLengthOf(bn: bigint): number {
     dec = dec >> 8n;
   }
   return len;
+}
+
+export async function analyzeMethods(zkpMethods: ZkProgramMethods) {
+  const zkp = ZkProgram({
+    name: randomUUIDv7("base64"),
+    publicOutput: Out,
+    methods: zkpMethods,
+  });
+  return mapObject(
+    await zkp.analyzeMethods(),
+    (m) => m.summary()["Total rows"],
+  );
 }

@@ -74,18 +74,28 @@ export function bytesToLimbBE(bytes_: UInt8[]) {
   return limb.seal();
 }
 
-ProvableType;
-
 export function hashBytewisePoseidon(db: DynamicBytes): Field {
   let state = Poseidon.initialState();
-  db.forEach((u8, isDummy, _i) => {
+  const [fullChunks, lastChunk] = db.chunk(2);
+  fullChunks.forEach((pair, isDummy, _i) => {
     // @ts-ignore
     state = Provable.if(
       isDummy,
       Provable.Array(Field, 3),
       state,
-      Poseidon.update(state, [u8.value]),
+      Poseidon.update(state, [pair.array[0].value, pair.array[1].value]),
     );
   });
+  // @ts-ignore
+  state = Provable.if(
+    lastChunk.length.equals(2),
+    Provable.Array(Field, 3),
+    Poseidon.update(state, [
+      lastChunk.array[0].value,
+      lastChunk.array[1].value,
+    ]),
+    Poseidon.update(state, [lastChunk.array[0].value]),
+  );
+
   return state[0];
 }

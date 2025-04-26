@@ -74,8 +74,10 @@ export function bytesToLimbBE(bytes_: UInt8[]) {
   return limb.seal();
 }
 
-export function hashBytewisePoseidon(db: DynamicBytes): Field {
-  let state = Poseidon.initialState();
+export function hashBytewisePoseidonState(
+  state: [Field, Field, Field],
+  db: DynamicBytes,
+) {
   const [fullChunks, lastChunk] = db.chunk(2);
   fullChunks.forEach((pair, isDummy, _i) => {
     // @ts-ignore
@@ -97,5 +99,9 @@ export function hashBytewisePoseidon(db: DynamicBytes): Field {
     Poseidon.update(state, [lastChunk.array[0].value]),
   );
 
-  return state[0];
+  return state;
+}
+
+export function hashBytewisePoseidon(db: DynamicBytes): Field {
+  return hashBytewisePoseidonState(Poseidon.initialState(), db)[0];
 }

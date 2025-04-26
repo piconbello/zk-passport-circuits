@@ -6,31 +6,14 @@ import {
   parseModulusIntoLimbs,
   addByteToLimbs,
 } from "./parsing";
-import type {
-  ProvableBigintBase,
-  ProvableBigintStatic,
-} from "./provableBigint";
+import type { ProvableBigIntType } from "./provableBigint";
 
-/**
- * Constructs the PKCS#1 v1.5 padded message for RSA signature verification.
- * EMSA-PKCS1-v1_5 = 0x00 || 0x01 || PS || 0x00 || T
- * Where T is the DER encoding of the DigestInfo (hash algorithm + digest)
- * and PS is padding bytes (0xFF).
- *
- * This function uses pre-computed templates containing the fixed padding and
- * DigestInfo structure, leaving space for the actual digest bytes.
- *
- * @template T - The specific ProvableBigint type (e.g., ProvableBigint2048).
- * @param StaticType - The static class (`ProvableBigintStatic`) for the target bigint size.
- * @param digest - The raw message digest (e.g., SHA256 output) as o1js Bytes.
- * @returns The padded message as an instance of T.
- */
-export function rsaMessageFromDigest<T extends ProvableBigintBase>(
-  StaticType: ProvableBigintStatic<T>,
+export function rsaMessageFromDigest(
+  ProvableBigInt: ProvableBigIntType,
   digest: Bytes,
-): T {
-  const keySize = StaticType._bitSize;
-  const numLimbs = StaticType._numLimbs;
+) {
+  const keySize = ProvableBigInt._BIT_SIZE;
+  const numLimbs = ProvableBigInt._NUM_LIMBS;
   let hashAlgoName: string;
   let digestLength: number;
 
@@ -68,7 +51,7 @@ export function rsaMessageFromDigest<T extends ProvableBigintBase>(
   // --- Initialize limbs from template ---
   // Convert template string values (representing decimal limb values) to Field elements
   const limbs: Field[] = limbsDecimalStrs.map((s) => Field.fromValue(s));
-  const templateBigint = StaticType.fromLimbs(limbs).toBigint();
+  const templateBigint = ProvableBigInt.fromFields(limbs).toBigint();
   const templateHex = templateBigint.toString(16).padStart(keySize / 4, "0"); // Pad to full length!
   // console.log(
   //   `    Expected Template Hex (${templateHex.length / 2} bytes): ${templateHex}`,
@@ -101,7 +84,7 @@ export function rsaMessageFromDigest<T extends ProvableBigintBase>(
 
   // --- Final Result ---
   // Create the ProvableBigint instance from the constructed limbs.
-  const messageBigint = StaticType.fromLimbs(limbs);
+  const messageBigint = ProvableBigInt.fromFields(limbs);
 
   // Perform range checks on the final limbs within the circuit.
   messageBigint.checkLimbs(); // Ensures limbs are within the valid range

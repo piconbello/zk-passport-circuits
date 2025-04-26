@@ -10,9 +10,14 @@ import {
   parseFromBE,
 } from "../../unrolled_meta/rsa/parsingStatic";
 import { ProvableBigint2048, RsaMessage2048 } from "./constants";
-import { serializedLengthOf } from "../../unrolled_meta/utils";
+import {
+  arrToBigint,
+  bigintToArr,
+  serializedLengthOf,
+} from "../../unrolled_meta/utils";
 import { rsaExponentiationFast } from "../../unrolled_meta/rsa/provableBigint";
 import { sha256 } from "@noble/hashes/sha256";
+import Contains from "../../unrolled_meta/contains";
 
 const KEY_SIZE_BITS = 2048n;
 
@@ -45,6 +50,9 @@ export function getRsaValidationLocal2048Pss(
           encodedMessageBigint,
           "encoded message parsed",
         );
+        expOut.messageDigest.assertEquals(
+          Poseidon.hash(messageShaDigest.bytes.map((b) => b.value)),
+        );
         pssVerify(
           encodedMessage.bytes,
           KEY_SIZE_BITS - 1n,
@@ -65,7 +73,10 @@ export function getRsaValidationLocal2048Pss(
         return {
           publicOutput: {
             left: expOut.hashPoseidon(),
-            right: Poseidon.hash(encodedPubkey),
+            right: Poseidon.hash([
+              Poseidon.hash(encodedPubkey),
+              ...Contains.init().toFields(),
+            ]),
             vkDigest: Field(0),
           },
         };
@@ -73,9 +84,6 @@ export function getRsaValidationLocal2048Pss(
     },
   };
 }
-
-const methods = getRsaValidationLocal2048Pss(true, 3, 32, 32);
-// console.log(methods);
 
 export function generateCall(
   isModulusPrefixedWithZero: boolean,
@@ -86,20 +94,12 @@ export function generateCall(
   exponent: bigint,
   signedAttrs: Uint8Array,
 ): PerProgram {
-  const signHex = Buffer.from(signature).toString("hex");
-  const signBn = signHex ? BigInt("0x" + signHex) : 0n;
+  const signBn = arrToBigint(signature);
   const expResult = rsaExponentiationFast(signBn, modulus, exponent);
-  let emHex = expResult.toString(16);
-  // Add a leading zero if the length is odd to ensure proper byte alignment
-  if (emHex.length % 2 !== 0) {
-    emHex = "0" + emHex;
-  }
-  const encodedMessage = Bytes.from(Buffer.from(emHex, "hex"));
-  let modulusHex = modulus.toString(16);
-  if (modulusHex.length % 2 !== 0) {
-    modulusHex = "0" + modulusHex;
-  }
-  const encodedModulus = Bytes.from(Buffer.from(modulusHex, "hex"));
+  const encodedMessage = Bytes.from(bigintToArr(expResult));
+  const encodedModulus = Bytes.from(bigintToArr(modulus));
+  if (digestSizeBytes !== 32) throw new Error("support digest size");
+  const messageShaDigest = Bytes.from(sha256(signedAttrs));
   return {
     methods: getRsaValidationLocal2048Pss(
       isModulusPrefixedWithZero,
@@ -116,8 +116,11 @@ export function generateCall(
             signature: ProvableBigint2048.fromBytes(signature),
             exponent: Field(exponent),
             result: ProvableBigint2048.fromBigint(expResult),
+            messageDigest: Poseidon.hash(
+              messageShaDigest.bytes.map((b) => b.value),
+            ),
           }),
-          Bytes.from(sha256(signedAttrs)),
+          messageShaDigest,
           encodedMessage,
           encodedModulus,
         ],

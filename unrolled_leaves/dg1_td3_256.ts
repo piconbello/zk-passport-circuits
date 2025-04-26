@@ -4,6 +4,7 @@ import { SHA2 } from "@egemengol/mina-credentials/dynamic";
 import { Out } from "../unrolled_meta/out";
 import type { PerProgram, ZkProgramMethods } from "../unrolled_meta/interface";
 import { LdsDigestState_256 } from "./lds_256";
+import { DigestState_256 } from "./digest_256";
 
 // TODO maybe use poseidon-safe implementation that encodes length?
 
@@ -16,14 +17,12 @@ export const DG1_TD3_256_Methods: ZkProgramMethods = {
         dg1Digest.bytes.map((uint) => uint.value),
       );
 
-      const initstate_256 = new LdsDigestState_256(
-        LdsDigestState_256.initial(),
-      );
+      const initstate_256 = DigestState_256.initWithCarry(dg1DigestDigest);
 
       return {
         publicOutput: new Out({
           left: Poseidon.hash(dg1.bytes.map((u8) => u8.value)),
-          right: Poseidon.hash([dg1DigestDigest, initstate_256.hash()]),
+          right: initstate_256.hashPoseidon(),
           vkDigest: Field(0),
         }),
       };

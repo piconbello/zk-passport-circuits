@@ -1,4 +1,4 @@
-import { Field, Provable, Struct, ZkProgram, Poseidon, Bytes } from "o1js";
+import { Field, Provable, Struct, Poseidon, Bytes } from "o1js";
 import {
   createProvableBigint,
   EXP_BIT_COUNT,
@@ -16,7 +16,7 @@ export class Exp2048_Input extends Struct({
   modulus: ProvableBigint2048,
   signature: ProvableBigint2048,
   exponent: Field,
-  signedAttrsDigestDigest: Field,
+  messageDigest: Field,
 }) {}
 
 export class Exp2048_Output extends Struct({
@@ -24,6 +24,7 @@ export class Exp2048_Output extends Struct({
   modulus: ProvableBigint2048,
   signature: ProvableBigint2048,
   exponent: Field,
+  messageDigest: Field,
 }) {
   hashPoseidon() {
     return Poseidon.hash([
@@ -31,11 +32,12 @@ export class Exp2048_Output extends Struct({
       ...this.modulus.fields,
       ...this.signature.fields,
       this.exponent,
+      this.messageDigest,
     ]);
   }
 }
 
-export const ExpExponentiation2048_Methods: ZkProgramMethods = {
+export const RsaExponentiation_2048_Methods: ZkProgramMethods = {
   exponentiate: {
     privateInputs: [Exp2048_Input],
 
@@ -58,7 +60,7 @@ export const ExpExponentiation2048_Methods: ZkProgramMethods = {
       });
       return {
         publicOutput: {
-          left: inp.signedAttrsDigestDigest,
+          left: inp.messageDigest,
           right: out.hashPoseidon(),
           vkDigest: Field(0),
         },
@@ -74,7 +76,7 @@ export function generateCall(
   signedAttrs: Uint8Array,
 ): PerProgram {
   return {
-    methods: ExpExponentiation2048_Methods,
+    methods: RsaExponentiation_2048_Methods,
     calls: [
       {
         methodName: "exponentiate",
@@ -83,7 +85,7 @@ export function generateCall(
             modulus: ProvableBigint2048.fromBigint(modulus),
             signature: ProvableBigint2048.fromBytes(signature),
             exponent: Field(exponent),
-            signedAttrsDigestDigest: Poseidon.hash(
+            messageDigest: Poseidon.hash(
               Bytes.from(sha256(signedAttrs)).bytes.map((b) => b.value),
             ),
           }),

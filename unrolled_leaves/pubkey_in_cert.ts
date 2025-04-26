@@ -9,6 +9,7 @@ import type {
   ZkProgramMethods,
   Call,
 } from "../unrolled_meta/interface";
+import { DigestState_256 } from "./digest_256";
 
 // Define DynamicBytes types for chunks and needle
 // Adjust maxLength as needed for your specific certificate/pubkey constraints
@@ -66,7 +67,7 @@ export const PubkeyInCert_Methods: ZkProgramMethods = {
       };
     },
   },
-  validateContains: {
+  validateContains_256: {
     privateInputs: [Field, ContainsState, Certificate], // Use the appropriate Certificate type
     async method(
       pubkeyDigest: Field,
@@ -80,29 +81,32 @@ export const PubkeyInCert_Methods: ZkProgramMethods = {
       // Calculate the final digest of the entire certificate using the Contains.digest logic
       // Note: This assumes Contains.digest works correctly with the Certificate type
       const certDigest = Contains.digest(Poseidon.initialState(), cert)[0];
+
+      const digestState = DigestState_256.initWithCarry(certDigest);
+
       // Return the output linking the final state hash and the certificate digest
       return {
         publicOutput: new Out({
           left: Poseidon.hash([pubkeyDigest, ...finalState.toFields()]),
-          right: certDigest,
+          right: digestState.hashPoseidon(),
           vkDigest: Field(0), // Placeholder
         }),
       };
     },
   },
-  ident: {
-    // Identity function, useful for padding or initial/final steps if needed
-    privateInputs: [Field],
-    async method(f: Field) {
-      return {
-        publicOutput: new Out({
-          left: f,
-          right: f,
-          vkDigest: Field(0),
-        }),
-      };
-    },
-  },
+  // ident: {
+  //   // Identity function, useful for padding or initial/final steps if needed
+  //   privateInputs: [Field],
+  //   async method(f: Field) {
+  //     return {
+  //       publicOutput: new Out({
+  //         left: f,
+  //         right: f,
+  //         vkDigest: Field(0),
+  //       }),
+  //     };
+  //   },
+  // },
 };
 
 /**
@@ -113,10 +117,7 @@ export const PubkeyInCert_Methods: ZkProgramMethods = {
  * @param pubkey - The public key data as a Uint8Array.
  * @returns An array containing one PerProgram object describing the sequence of calls.
  */
-export function generateCalls(
-  cert: Uint8Array,
-  pubkey: Uint8Array,
-): PerProgram {
+export function generateCall(cert: Uint8Array, pubkey: Uint8Array): PerProgram {
   // 1. Chunkify the haystack (certificate) based on the needle (pubkey)
   const { headingChunks, overlappingChunk, tailingChunks } =
     Contains.chunkifyHaystack(PubkeyInCertChunk.maxLength, cert, pubkey);
@@ -180,7 +181,7 @@ export function generateCalls(
   const fullCertBytes = Certificate.fromBytes(cert); // Use the correct Certificate type
   const finalState = currentState; // Capture the final state
   calls.push({
-    methodName: "validateContains",
+    methodName: "validateContains_256",
     args: [pubkeyDigest, finalState, fullCertBytes],
   });
 

@@ -1,5 +1,6 @@
 import { DynamicBytes } from "@egemengol/mina-credentials";
 import { Bool, Bytes, Field, Poseidon, Provable, Struct } from "o1js";
+import { hashBytewisePoseidonState } from "../unrolled_leaves/utils";
 
 export class State extends Struct({
   commitmentHaystack: [Field, Field, Field],
@@ -38,19 +39,7 @@ function digest(
   state: [Field, Field, Field],
   chunk: DynamicBytes,
 ): [Field, Field, Field] {
-  let stateMut = [state[0], state[1], state[2]];
-  chunk.forEach((b, isPadding) => {
-    const newState = Poseidon.update(
-      // @ts-ignore
-      stateMut,
-      [b.value.add(1)],
-    );
-    stateMut[0] = Provable.if(isPadding, stateMut[0], newState[0]);
-    stateMut[1] = Provable.if(isPadding, stateMut[1], newState[1]);
-    stateMut[2] = Provable.if(isPadding, stateMut[2], newState[2]);
-  });
-  // @ts-ignore
-  return stateMut;
+  return hashBytewisePoseidonState(state, chunk);
 }
 
 function processRegularChunk(state: State, chunkHaystack: DynamicBytes): State {

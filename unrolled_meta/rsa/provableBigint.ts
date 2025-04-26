@@ -450,3 +450,73 @@ export function rsaExponentiationFast(
   }
   return result;
 }
+
+export function rsaExponentiationFastStepped(
+  signature: bigint,
+  modulus: bigint,
+  publicExponent: bigint,
+  stepBitCounts: number[],
+): bigint[] {
+  if (signature <= 0n) {
+    throw new Error("Signature must be positive.");
+  }
+  if (publicExponent <= 0n) {
+    throw new Error("Public exponent must be positive.");
+  }
+  if (modulus <= 0n) {
+    throw new Error("Modulus must be positive.");
+  }
+
+  let sumOfSteps = 0;
+  for (const count of stepBitCounts) {
+    if (typeof count !== "number" || !Number.isInteger(count) || count <= 0) {
+      throw new Error(
+        `Invalid element in stepBitCounts: ${count}. All elements must be positive integers.`,
+      );
+    }
+    sumOfSteps += count;
+  }
+  if (sumOfSteps !== EXP_BIT_COUNT) {
+    throw new Error(
+      `Sum of stepBitCounts (${sumOfSteps}) must equal totalNumBits (${EXP_BIT_COUNT}).`,
+    );
+  }
+  const results: bigint[] = [];
+  let currentResult = 1n;
+  let currentBitIndex = EXP_BIT_COUNT - 1; // Start from the MSB of the relevant range
+
+  for (const stepBits of stepBitCounts) {
+    for (let j = 0; j < stepBits; j++) {
+      if (currentBitIndex < 0) {
+        // This should not happen if sumOfSteps === EXP_BIT_COUNT
+        throw new Error("Internal error: Ran out of bits unexpectedly.");
+      }
+      currentResult = (currentResult * currentResult) % modulus;
+      const bit = (publicExponent >> BigInt(currentBitIndex)) & 1n;
+      if (bit === 1n) {
+        currentResult = (currentResult * signature) % modulus;
+      }
+      currentBitIndex--; // Move to the next lower bit
+    }
+    // After processing 'stepBits' bits, record the result
+    results.push(currentResult);
+  }
+
+  // Final check to ensure we processed exactly EXP_BIT_COUNT bits
+  if (currentBitIndex !== -1) {
+    throw new Error(
+      `Internal error: Expected bit index to be -1 after processing all steps, but got ${currentBitIndex}.`,
+    );
+  }
+
+  return results;
+}
+
+export type ProvableBigIntType = ReturnType<typeof createProvableBigint>;
+
+// Function signature using these aliases (or inline)
+// function someOperation<SpecificBigintType extends ProvableBigintFactoryOutput>(
+//     BigintType: SpecificBigintType, // Expects a specific constructor passed in
+//     a: ProvableBigint<SpecificBigintType>,
+//     b: ProvableBigint<SpecificBigintType>
+// ): ProvableBigint<SpecificBigintType> {

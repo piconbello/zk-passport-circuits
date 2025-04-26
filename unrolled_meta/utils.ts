@@ -45,3 +45,19 @@ export async function analyzeMethods(zkpMethods: ZkProgramMethods) {
     (m) => m.summary()["Total rows"],
   );
 }
+
+export function arrToBigint(arr: Uint8Array): bigint {
+  let hex = Buffer.from(arr).toString("hex");
+  if (hex.length % 2 !== 0) {
+    hex = "0" + hex;
+  }
+  return hex ? BigInt("0x" + hex) : 0n;
+}
+
+export function bigintToArr(bn: bigint): Uint8Array {
+  let hex = bn.toString(16);
+  if (hex.length % 2 !== 0) {
+    hex = "0" + hex;
+  }
+  return Buffer.from(hex, "hex");
+}

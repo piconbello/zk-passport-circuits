@@ -120,6 +120,7 @@ export function generateCall(
     [10, 10],
   );
   return {
+    id: "Rsa_Exp_4096",
     methods: RsaExponentiation_4096_Methods,
     calls: [
       {

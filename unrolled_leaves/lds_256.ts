@@ -54,6 +54,7 @@ export function generateCalls(
   const { perPrograms, state: digestState } = generateDigestCalls(carry, lds);
 
   const verify: PerProgram = {
+    id: "LDS_Verifier_256",
     methods: LDS_Verifier_256_Methods,
     calls: [
       {

@@ -187,6 +187,7 @@ export function generateCall(cert: Uint8Array, pubkey: Uint8Array): PerProgram {
 
   // 9. Package the calls into the PerProgram structure
   const programDefinition: PerProgram = {
+    id: "Pubkey_In_Cert",
     methods: PubkeyInCert_Methods, // Reference the methods object
     calls: calls, // Provide the generated call sequence
   };

@@ -121,6 +121,7 @@ export function generateCalls(carry: Field, message: DynamicBytes) {
   );
 
   const stepper: PerProgram = {
+    id: "Digest_Step_256",
     methods: Digest_Step_256_Methods,
     calls: [],
   };
@@ -140,6 +141,7 @@ export function generateCalls(carry: Field, message: DynamicBytes) {
 
   if (laststep.blocks.length.toBigInt() !== 0n) {
     const finalize: PerProgram = {
+      id: "Digest_Finalize_256",
       methods: Digest_Finalize_256_Methods,
       calls: [
         {

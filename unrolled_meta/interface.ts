@@ -14,8 +14,18 @@ export interface ZkProgramMethods {
 }
 
 export interface PerProgram {
+  id?: string;
   methods: ZkProgramMethods;
   calls: Call[];
+}
+
+export function identifyPerProgram(pp: PerProgram): string {
+  if (pp.id) {
+    return pp.id;
+  } else {
+    const methodNames = Object.keys(pp.methods);
+    return `[${methodNames.join(", ")}]`;
+  }
 }
 
 export interface Call {

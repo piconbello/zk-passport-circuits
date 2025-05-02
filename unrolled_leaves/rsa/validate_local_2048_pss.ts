@@ -101,6 +101,7 @@ export function generateCall(
   if (digestSizeBytes !== 32) throw new Error("support digest size");
   const messageShaDigest = Bytes.from(sha256(signedAttrs));
   return {
+    id: "Local_Pss_2048",
     methods: getRsaValidationLocal2048Pss(
       isModulusPrefixedWithZero,
       serializedLengthOf(exponent),

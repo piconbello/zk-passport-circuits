@@ -47,12 +47,13 @@ export function generateCalls(certArr: Uint8Array): PerProgram[] {
     cert,
   );
 
-  console.log("state", digestState.hashPoseidon().toBigInt());
+  // console.log("state", digestState.hashPoseidon().toBigInt());
 
   // const lastCalls = perPrograms[perPrograms.length - 1].calls;
   // console.log(lastCalls[lastCalls.length - 1].args);
 
   const verify: PerProgram = {
+    id: "CertDigest_256",
     methods: CertDigest_256_Methods,
     calls: [
       {

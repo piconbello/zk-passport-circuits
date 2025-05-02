@@ -51,6 +51,7 @@ export function generateCall(
   const messageShaDigest = Bytes.from(sha256(certTbs));
 
   return {
+    id: "Master_Pkcs_4096",
     methods: getRsaValidationMaster4096Pkcs(digestSizeBytes),
     calls: [
       {

@@ -52,6 +52,7 @@ export function generateCalls(
   );
   const signedAttrsO1 = SIGNED_ATTRS_256.from(signedAttrs);
   return {
+    id: "SignedAttrs_256",
     methods: SignedAttrs_256_Methods,
     calls: [
       {

@@ -76,6 +76,7 @@ export function generateCall(
   signedAttrs: Uint8Array,
 ): PerProgram {
   return {
+    id: "Rsa_Exp_2048",
     methods: RsaExponentiation_2048_Methods,
     calls: [
       {

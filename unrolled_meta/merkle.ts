@@ -31,8 +31,16 @@ export class MerkleWitnessStep extends Struct({
 export class MerkleTree {
   private tree: Field[];
   public readonly height: number;
+  private readonly elements: Field[];
 
-  constructor(private elements: Field[]) {
+  constructor(elements: Field[]) {
+    if (!elements || elements.length === 0) {
+      throw new Error(
+        "MerkleTree must be initialized with at least one element.",
+      );
+    }
+    this.elements = [...elements]; // Store a copy
+
     elements.forEach((element, index) => {
       if (
         element === null ||
@@ -69,7 +77,7 @@ export class MerkleTree {
     return this.tree[0];
   }
 
-  getWitness(index: number) {
+  getWitnessAt(index: number) {
     if (index < 0 || index >= this.elements.length) {
       throw new Error(
         `Index ${index} out of bounds for ${this.elements.length} elements`,
@@ -95,5 +103,25 @@ export class MerkleTree {
     }
 
     return path;
+  }
+
+  getWitnessOf(valueToFind: Field): Step[] {
+    let foundIndex = -1;
+    for (let i = 0; i < this.elements.length; i++) {
+      // Use Field's equality check
+      if (this.elements[i].equals(valueToFind).toBoolean()) {
+        foundIndex = i;
+        break; // Stop at the first match
+      }
+    }
+
+    if (foundIndex === -1) {
+      throw new Error(
+        `Value ${valueToFind.toString()} not found in the Merkle tree leaves.`,
+      );
+    }
+
+    // If found, delegate to the index-based witness generation
+    return this.getWitnessAt(foundIndex);
   }
 }

@@ -3,7 +3,6 @@ import { DG1_TD3 } from "./constants";
 import { SHA2 } from "@egemengol/mina-credentials/dynamic";
 import { Out } from "../unrolled_meta/out";
 import type { PerProgram, ZkProgramMethods } from "../unrolled_meta/interface";
-import { LdsDigestState_256 } from "./lds_256";
 import { DigestState_256 } from "./digest_256";
 
 // TODO maybe use poseidon-safe implementation that encodes length?
@@ -33,6 +32,7 @@ export const DG1_TD3_256_Methods: ZkProgramMethods = {
 export function generateCalls(dg1: Uint8Array): PerProgram {
   const dg1Bytes = DG1_TD3.from(dg1);
   return {
+    id: "DG1_TD3_256",
     methods: DG1_TD3_256_Methods,
     calls: [
       {

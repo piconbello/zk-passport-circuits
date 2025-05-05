@@ -42,6 +42,7 @@ export function generateCall(
   const ldsDigest = Bytes.from(sha256(lds));
   const signedAttrsO1 = SIGNED_ATTRS_256.from(signedAttrs);
   return {
+    id: "SignedAttrs_256_256",
     methods: SignedAttrs_256_256_Methods,
     calls: [
       {

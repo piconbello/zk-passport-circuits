@@ -12,7 +12,7 @@ import { masterlistIntoLeaves } from "../../unrolled_meta/masterlistIntoMerkle";
 import { calcMerkleHeightFor } from "../../unrolled_meta/merkle";
 import { log } from "../../unrolled_meta/logger";
 
-const MASTERLIST_LEAVES = await (async function() {
+const MASTERLIST_LEAVES = await (async function () {
   log.start("masterlist parsing");
   const masterlistText = await Bun.file("./files/masterlist_284.json").text();
   const masterCerts = parseMasterlist(masterlistText);

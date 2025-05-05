@@ -8,6 +8,8 @@ import { Out } from "../../unrolled_meta/out";
 import { ZkProgram } from "o1js";
 import { log } from "../../unrolled_meta/logger";
 import * as path from "node:path";
+import { serializeRichProof, type RichProof } from "./richProof";
+import { MergerProof } from "../../circuits/bimodal/merger";
 
 async function proveSinglePP(logger: typeof log, pp: PerProgram) {
   const proofs = [];
@@ -20,7 +22,7 @@ async function proveSinglePP(logger: typeof log, pp: PerProgram) {
   });
 
   logger.start(`compiling ${ppId}`);
-  await program.compile();
+  const vk = (await program.compile()).verificationKey;
   logger.finish(`compiling ${ppId}`);
 
   for (const call of pp.calls) {
@@ -45,7 +47,11 @@ async function proveSinglePP(logger: typeof log, pp: PerProgram) {
       );
     }
   }
-  return proofs;
+  return { proofs, vk };
+}
+
+function proofFileName(iStep: number, iProof: number, ppId: string) {
+  return `s_${iStep.toString().padStart(2, "0")}_${iProof.toString().padStart(2, "0")}_${ppId}.json`;
 }
 
 export async function proveStep(
@@ -55,16 +61,22 @@ export async function proveStep(
   stepIndex: number,
 ) {
   const pps = stepHandler(step);
+  let i = 0;
   for (let pp of pps) {
     const ppId = identifyPerProgram(pp);
-    const proofsOfPP = await proveSinglePP(logger, pp);
-    for (let i = 0; i < proofsOfPP.length; i++) {
-      const proofJsonName = `s_${stepIndex}_pp_${ppId}_i_${i}.json`;
+    const { proofs: proofsOfPP, vk } = await proveSinglePP(logger, pp);
+    for (let proof of proofsOfPP) {
+      const proofJsonName = proofFileName(stepIndex, i, ppId);
       const proofJsonPath = path.join(folder, proofJsonName);
-      await Bun.file(proofJsonPath).write(
-        JSON.stringify(proofsOfPP[i].toJSON()),
-      );
+      const mergerProof = await MergerProof.fromJSON(proof.toJSON());
+      const richProof: RichProof = {
+        proof: mergerProof,
+        vk,
+      };
+      const serialized = serializeRichProof(richProof);
+      await Bun.file(proofJsonPath).write(serialized);
       logger.info("written", proofJsonName);
+      i++;
     }
   }
 }

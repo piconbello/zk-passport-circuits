@@ -1,13 +1,5 @@
-import { stepHandler } from "./handler";
 import { prepareStepInputsForExpiredBundle } from "./realExpired";
 import { StepSchema, type Step } from "./workerSchema";
-import {
-  identifyPerProgram,
-  type PerProgram,
-} from "../../unrolled_meta/interface";
-import { expect } from "bun:test";
-import { Out } from "../../unrolled_meta/out";
-import { Field, ZkProgram } from "o1js";
 import { log } from "../../unrolled_meta/logger";
 import * as path from "node:path";
 import { parseArgs } from "node:util";
@@ -96,7 +88,7 @@ async function main() {
   if (folder === undefined) {
     throw new Error("Require worker folder as the first argument");
   }
-  const files = fs.readdirSync(folder);
+  let files = fs.readdirSync(folder);
   for (const file of files) {
     if (file.endsWith(".json")) {
       const filePath = path.join(folder, file);
@@ -122,6 +114,29 @@ async function main() {
     }
     log.finish("spawning child for step", step.step);
   }
+
+  // merger
+  log.info("HERE");
+  files = fs
+    .readdirSync(folder)
+    .filter((f) => f.endsWith(".json"))
+    .toSorted()
+    .map((f) => path.join(folder, f));
+  log.start("spawning merger worker");
+  const mergerProc = Bun.spawn(["bun", "pipelines/registry/proverMerger.ts"], {
+    stdio: ["inherit", "inherit", "inherit"],
+    ipc() {},
+  });
+  mergerProc.send({
+    leafProofJsonPaths: files,
+    rootProofJsonPath: path.join(folder, "rootProof.json"),
+  });
+  await mergerProc.exited;
+  if (mergerProc.exitCode !== 0) {
+    log.error("merger worker failed");
+    return;
+  }
+  log.finish("spawning merger worker");
 }
 
 if (import.meta.path === Bun.main) {

@@ -69,7 +69,7 @@ const BundleStringSchema = z.object({
 // Master Cert Schema using only string validation
 const MasterCertStringSchema = z.object({
   pubkey: PublicKeySchema, // Will contain string fields
-  subject_key_id: B64StringSchema,
+  subject_key_id: B64StringSchema.nullable(),
 });
 
 const MasterListStringSchema = z.object({
@@ -77,11 +77,11 @@ const MasterListStringSchema = z.object({
 });
 
 // --- Exported Types (will contain strings for b64 data) ---
-// export type PublicKeyEC = z.infer<typeof PublicKeyECSchemaBase>;
+export type PublicKeyEC = z.infer<typeof PublicKeyECSchemaBase>;
 export type RSAPublicKey = z.infer<typeof RSAPublicKeySchemaBase>;
 export type PublicKey = z.infer<typeof PublicKeySchema>;
 
-// export type SignatureEC = z.infer<typeof SignatureECSchemaBase>;
+export type SignatureEC = z.infer<typeof SignatureECSchemaBase>;
 export type SignatureRsaPss = z.infer<typeof SignatureRsaPssSchemaBase>;
 export type SignatureRsaPkcs = z.infer<typeof SignatureRsaPkcsSchemaBase>;
 export type Signature = z.infer<typeof SignatureSchema>;

@@ -1,10 +1,12 @@
 import { stepHandler } from "./handler";
-import { prepareStepInputsForExpiredBundle } from "./realExpired";
+import { prepareStepInputsForValidBundle } from "./realValid";
 import { StepSchema, type Step } from "./workerSchema";
 import type { PerProgram } from "../../unrolled_meta/interface";
 import { expect } from "bun:test";
 import type { Out } from "../../unrolled_meta/out";
 import { Field } from "o1js";
+import { prepareStepInputsForFakeEcBundle } from "./fakeEc";
+import { prepareStepInputsForExpiredBundle } from "./realExpired";
 
 export async function processFast(pps: PerProgram[]) {
   const outs: Out[] = [];
@@ -56,7 +58,8 @@ export async function processFast(pps: PerProgram[]) {
 }
 
 async function main() {
-  const stepsB64 = await prepareStepInputsForExpiredBundle();
+  const stepsB64 = await prepareStepInputsForFakeEcBundle();
+  // const stepsB64 = await prepareStepInputsForExpiredBundle();
   // @ts-ignore
   const steps: Step[] = stepsB64.map(StepSchema.parse);
   const perPrograms = steps.flatMap(stepHandler);

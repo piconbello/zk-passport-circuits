@@ -4,6 +4,7 @@ import { log } from "../../unrolled_meta/logger";
 import * as path from "node:path";
 import { parseArgs } from "node:util";
 import * as fs from "node:fs";
+import { prepareStepInputsForFakeEcBundle } from "./fakeEc";
 
 // async function proveSinglePP(pp: PerProgram) {
 //   const proofs = [];
@@ -97,6 +98,7 @@ async function main() {
     }
   }
   const stepsB64 = await prepareStepInputsForExpiredBundle();
+  // const stepsB64 = await prepareStepInputsForFakeEcBundle();
   for (let i = 0; i < stepsB64.length; i++) {
     const step = StepSchema.parse(stepsB64[i]);
     log.start("spawning child for step", step.step);

@@ -13,8 +13,8 @@ import {
 import { DynamicBytes, StaticArray } from "@egemengol/mina-credentials/dynamic";
 import { State as ContainsState } from "../unrolled_meta/contains";
 
-const LDS_256_MAX_LENGTH = 800;
-const LDS_512_MAX_LENGTH = 1200;
+export const LDS_256_MAX_LENGTH = 800;
+export const LDS_512_MAX_LENGTH = 1200;
 
 export class DG1_TD3 extends Bytes(93) {}
 export class LDS_256 extends DynamicBytes({ maxLength: LDS_256_MAX_LENGTH }) {}

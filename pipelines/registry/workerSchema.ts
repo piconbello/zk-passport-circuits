@@ -42,7 +42,8 @@ export const S_LDS = z.object({
 });
 
 export const S_SIGNEDATTRS = z.object({
-  digestAlgo: z.literal("sha256"),
+  digestAlgoHead: z.literal("sha256"),
+  digestAlgoTail: z.literal("sha256"),
   lds: B64,
   signedAttrs: B64,
 });
@@ -64,6 +65,16 @@ export const S_RSA_VERIFY_LOCAL_PSS = z.object({
   signature: B64,
   exponent: B64Bigint,
   signedAttrs: B64,
+});
+
+export const S_SECPr1_LOCAL = z.object({
+  size: z.literal(256),
+  signedAttrsDigest: B64,
+  pubkey: B64,
+  signature: z.object({
+    r: B64,
+    s: B64,
+  }),
 });
 
 export const S_PUBKEY_IN_CERT = z.object({
@@ -91,6 +102,16 @@ export const S_RSA_VERIFY_MASTER_PKCS = z.object({
   signature: B64,
   exponent: B64Bigint,
   message: B64,
+});
+
+export const S_SECPr1_MASTER = z.object({
+  size: z.literal(256),
+  certDigest: B64,
+  pubkey: B64,
+  signature: z.object({
+    r: B64,
+    s: B64,
+  }),
 });
 
 export const S_MASTERLIST_CONTAINS = z.object({
@@ -121,6 +142,10 @@ export const StepSchema = z.discriminatedUnion("step", [
     data: S_RSA_VERIFY_LOCAL_PSS,
   }),
   z.object({
+    step: z.literal("SECPr1_LOCAL"),
+    data: S_SECPr1_LOCAL,
+  }),
+  z.object({
     step: z.literal("PUBKEY_IN_CERT"),
     data: S_PUBKEY_IN_CERT,
   }),
@@ -135,6 +160,10 @@ export const StepSchema = z.discriminatedUnion("step", [
   z.object({
     step: z.literal("RSA_VERIFY_MASTER_PKCS"),
     data: S_RSA_VERIFY_MASTER_PKCS,
+  }),
+  z.object({
+    step: z.literal("SECPr1_MASTER"),
+    data: S_SECPr1_MASTER,
   }),
   z.object({
     step: z.literal("MASTERLIST_CONTAINS"),

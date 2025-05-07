@@ -21,8 +21,8 @@ const MASTERLIST_LEAVES = await (async function () {
   return leaves;
 })();
 
-export async function prepareStepInputsForExpiredBundle() {
-  const t = await Bun.file("./files/bundle.emre.expired.json").text();
+export async function prepareStepInputsForValidBundle() {
+  const t = await Bun.file("./files/bundle.emre.valid.json").text();
   // console.log("before parsing bundle");
   const bundle = parseBundle(t);
   // console.log("after parsing bundle");
@@ -59,8 +59,7 @@ export async function prepareStepInputsForExpiredBundle() {
       data: {
         lds: bundle.lds,
         signedAttrs: bundle.signed_attrs,
-        digestAlgoHead: "sha256",
-        digestAlgoTail: "sha256",
+        digestAlgo: "sha256",
       },
     },
     {

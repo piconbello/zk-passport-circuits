@@ -1,4 +1,4 @@
-import { UInt8, Field, Poseidon, Provable, ProvableType } from "o1js";
+import { UInt8, Field, Poseidon, Provable, ProvableType, Bool } from "o1js";
 import type { Bytes65 } from "./constants";
 import type { DynamicBytes } from "@egemengol/mina-credentials";
 
@@ -12,6 +12,21 @@ export function assertSubarray(
   for (let i = 0; i < sizeNeedle; i += 1) {
     haystack[offset + i].assertEquals(needle[i], message);
   }
+}
+
+export function checkSubarray(
+  haystack: UInt8[],
+  needle: UInt8[],
+  sizeNeedle: number,
+  offset: number,
+  message?: string,
+): Bool {
+  let matches = Bool.fromValue(true);
+  for (let i = 0; i < sizeNeedle; i += 1) {
+    const itemMatches = haystack[offset + i].value.equals(needle[i].value);
+    matches = matches.and(itemMatches);
+  }
+  return matches;
 }
 
 export function parseECpubkey256Uncompressed(sec1: Bytes65) {

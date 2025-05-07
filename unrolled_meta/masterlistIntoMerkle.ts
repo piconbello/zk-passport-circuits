@@ -1,11 +1,14 @@
-import { Field, Poseidon } from "o1js";
+import { Bytes, Field, Poseidon } from "o1js";
 import {
   type MasterCert,
+  type PublicKeyEC,
   type RSAPublicKey,
 } from "../pipelines/registry/bundle";
 import { MerkleTree } from "../unrolled_meta/merkle";
 import { createProvableBigint } from "../unrolled_meta/rsa/provableBigint";
 import { b64ToBigint } from "../pipelines/registry/workerSchema";
+import { parseECpubkey256Uncompressed } from "../unrolled_leaves/utils";
+import { decodeBase64 } from "../src/parseBundle";
 
 const ProvableBigint2048 = createProvableBigint(2048);
 const ProvableBigint4096 = createProvableBigint(4096);
@@ -30,23 +33,38 @@ function calculateRsaKeyDigest(key: RSAPublicKey): Field {
   return Poseidon.hash([...modulusFields, exponentField]);
 }
 
+export function calculateEcKeyDigestEc256(key: PublicKeyEC): Field {
+  const encoded = Bytes.from(decodeBase64(key.encoded));
+  const parsed = parseECpubkey256Uncompressed(encoded);
+  return Poseidon.hash([...parsed.x, ...parsed.y]);
+}
+
 export function masterlistIntoLeaves(masterCerts: MasterCert[]): Field[] {
-  const rsaLeaves: Field[] = masterCerts
-    .filter(
-      (cert): cert is MasterCert & { pubkey: RSAPublicKey } =>
+  const leaves: Field[] = masterCerts
+    .map((cert) => {
+      if (
         cert.pubkey.type === "RSA" &&
         (cert.pubkey.key_size_bits === 2048 ||
-          cert.pubkey.key_size_bits === 4096), // Ensure supported sizes
-    )
-    .map((cert) => calculateRsaKeyDigest(cert.pubkey));
+          cert.pubkey.key_size_bits === 4096)
+      ) {
+        return calculateRsaKeyDigest(cert.pubkey);
+      } else if (cert.pubkey.type === "EC") {
+        if (cert.pubkey.curve === "prime256v1")
+          return calculateEcKeyDigestEc256(cert.pubkey);
+        return null;
+      } else {
+        return null;
+      }
+    })
+    .filter((leaf): leaf is Field => leaf !== null);
 
-  if (rsaLeaves.length === 0) {
+  if (leaves.length === 0) {
     throw new Error(
-      "No supported RSA master keys found to build the Merkle tree.",
+      "No supported master keys (RSA or EC) found to build the Merkle tree.",
     );
   }
 
-  return rsaLeaves;
+  return leaves;
 }
 
 export function createMasterKeyMerkleTree(

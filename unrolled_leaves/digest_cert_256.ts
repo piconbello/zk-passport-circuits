@@ -23,6 +23,19 @@ const CertDigest_256_Methods: ZkProgramMethods = {
       // Provable.asProver(() => {
       //   console.log("state in", digestState.hashPoseidon().toBigInt());
       // });
+      Provable.asProver(() => {
+        console.log(
+          "in digest",
+          Buffer.from(certShaDigest.toBytes()).toString("base64"),
+        );
+        console.log(
+          "right",
+          Poseidon.hash([
+            ...certShaDigest.bytes.map((b) => b.value),
+          ]).toBigInt(),
+        );
+      });
+
       return {
         publicOutput: new Out({
           left: digestState.hashPoseidon(),

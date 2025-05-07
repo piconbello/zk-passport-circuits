@@ -9,9 +9,12 @@ import { generateCalls as generateCallsDigestCert } from "../../unrolled_leaves/
 import { generateCall as generateCallMasterExponentiate } from "../../unrolled_leaves/rsa/exponentiation_4096";
 import { generateCall as generateCallsMasterRsaPkcsVerify } from "../../unrolled_leaves/rsa/validate_master_4096_pkcs";
 import { generateCall as generateCallMasterlistContains } from "../../unrolled_leaves/masterlistContains.ts";
+import { generateCall as generateCallSecpr1Local256 } from "../../unrolled_leaves/secpr1_local_256_256.ts";
+import { generateCall as generateCallSecpr1Master256 } from "../../unrolled_leaves/secpr1_master_256_256.ts";
 import type { PerProgram } from "../../unrolled_meta/interface";
 import { Field } from "o1js";
 import { MerkleTree } from "../../unrolled_meta/merkle.ts";
+import { arrToBigint } from "../../unrolled_meta/utils.ts";
 
 export function stepHandler(stepObj: Step): PerProgram[] {
   // const stepObj = StepSchema.parse(stepSerial);
@@ -46,6 +49,17 @@ export function stepHandler(stepObj: Step): PerProgram[] {
           stepObj.data.signedAttrs,
         ),
       ];
+    case "SECPr1_LOCAL":
+      return [
+        generateCallSecpr1Local256(
+          stepObj.data.signedAttrsDigest,
+          stepObj.data.pubkey,
+          {
+            r: arrToBigint(stepObj.data.signature.r),
+            s: arrToBigint(stepObj.data.signature.s),
+          },
+        ),
+      ];
     case "PUBKEY_IN_CERT":
       return [
         generateCallPubkeyInCert(
@@ -72,6 +86,17 @@ export function stepHandler(stepObj: Step): PerProgram[] {
           stepObj.data.signature,
           b64ToBigint(stepObj.data.exponent),
           stepObj.data.message,
+        ),
+      ];
+    case "SECPr1_MASTER":
+      return [
+        generateCallSecpr1Master256(
+          stepObj.data.certDigest,
+          stepObj.data.pubkey,
+          {
+            r: arrToBigint(stepObj.data.signature.r),
+            s: arrToBigint(stepObj.data.signature.s),
+          },
         ),
       ];
     case "MASTERLIST_CONTAINS":
